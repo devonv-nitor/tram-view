@@ -185,6 +185,7 @@ class MqttWebSocketSubscription implements MqttSubscription {
 
   private open(): void {
     if (this.closed) return;
+    this.buffer = new PacketBuffer();
     this.setConnectionState("connecting");
     const socket = new WebSocket(this.url, MQTT_SUBPROTOCOL);
     socket.binaryType = "arraybuffer";
@@ -204,7 +205,7 @@ class MqttWebSocketSubscription implements MqttSubscription {
   }
 
   private receive(data: unknown): void {
-    if (!(data instanceof ArrayBuffer)) return;
+    if (this.closed || !(data instanceof ArrayBuffer)) return;
     this.buffer.push(new Uint8Array(data));
     for (;;) {
       let decoded: ReturnType<PacketBuffer["next"]>;
@@ -226,10 +227,15 @@ class MqttWebSocketSubscription implements MqttSubscription {
       case CONTROL_CONNACK: {
         const returnCode = body.length > 1 ? body[1] : 0xff;
         if (returnCode === 3) {
-          // Server unavailable is transient: retry with backoff.
+          // Server unavailable is transient: retry with backoff. Close and
+          // detach the socket first (MQTT 3.1.1 requires the broker to close
+          // after a non-zero CONNACK, but do not rely on it): an orphaned
+          // socket could otherwise double-schedule the retry or keep feeding
+          // the replacement connection's buffer.
           this.handlers.onError(
             new Error(`MQTT broker unavailable (code ${returnCode}); retrying`),
           );
+          this.dropSocket();
           this.scheduleReconnect();
           return;
         }
@@ -313,6 +319,29 @@ class MqttWebSocketSubscription implements MqttSubscription {
       this.reconnectTimer = null;
       this.open();
     }, delay);
+  }
+
+  /** Closes the current socket and detaches its handlers without ending the
+   * subscription, so a reconnect can proceed cleanly: the dropped socket can
+   * neither re-schedule the retry nor feed the next connection's buffer. */
+  private dropSocket(): void {
+    const socket = this.socket;
+    this.socket = null;
+    if (socket === null) return;
+    socket.onopen = null;
+    socket.onmessage = null;
+    socket.onerror = null;
+    socket.onclose = null;
+    if (
+      socket.readyState === WebSocket.OPEN ||
+      socket.readyState === WebSocket.CONNECTING
+    ) {
+      try {
+        socket.close();
+      } catch {
+        // The socket is going away regardless.
+      }
+    }
   }
 
   private send(bytes: Uint8Array): void {

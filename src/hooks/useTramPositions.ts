@@ -99,7 +99,13 @@ export function useTramPositions(): TramPositionsState {
       const connected = connectedRef.current;
       setState((prev) => ({
         ...prev,
-        status: connected ? "live" : "connecting",
+        // A dead stream with a known reason stays "error" durably; consumers
+        // switching on status alone still see the failure.
+        status: connected
+          ? "live"
+          : prev.error !== null
+            ? "error"
+            : "connecting",
         positions,
         updatedAt: positions.length > 0 ? new Date() : prev.updatedAt,
         error: connected ? null : prev.error,
