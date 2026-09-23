@@ -1,6 +1,6 @@
 ---
 id: TV-0003
-status: READY
+status: REVIEW
 owner: agent
 gatekeeper: human
 required_approvals: []
