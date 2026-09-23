@@ -1,0 +1,17 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+
+# Local env files (digitransit API key lives here, never commit it)
+.env
+.env.*
+!.env.example
+
+# Editor/OS
+.DS_Store
+*.local
+
+# TypeScript build info
+tsconfig.tsbuildinfo
