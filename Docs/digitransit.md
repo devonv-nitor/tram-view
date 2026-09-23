@@ -1,0 +1,50 @@
+# Digitransit data: API key and live tram positions
+
+Tram View reads live HSL tram positions and tram line metadata from two
+digitransit-provided transports. The transport decision (MQTT push vs
+polling) is recorded in
+[ADR 0002](./ADR/0002-data-transport.md); this page is the setup runbook.
+
+## Data architecture at a glance
+
+| Data | Transport | API key |
+| ---- | --------- | ------- |
+| Tram vehicle positions (lat/lon, heading, speed, direction, route id) | HFP MQTT over WebSockets, `wss://mqtt.hsl.fi:443/`, topic `/hfp/v2/journey/ongoing/vp/tram/#` (push, ~1 update/s per vehicle) | not needed |
+| Tram line metadata (route id -> short name, mode) | Routing API v2 GraphQL, `POST https://api.digitransit.fi/routing/v2/hsl/gtfs/v1`, query `routes { gtfsId shortName mode }`, fetched once per session and cached | required |
+
+The positions subscription is anonymous. The line-metadata query requires a
+digitransit subscription key; without one the app shows a clear error instead
+of silently hiding data, because the tram-line filter (short names 1-15 with
+an optional trailing letter, or a single letter) cannot be applied without
+the metadata.
+
+## API key setup
+
+1. Register for a digitransit subscription key at
+   <https://digitransit.fi/developers/getting-started/>.
+2. Copy `.env.example` to `.env.local` in the repo root.
+3. Set your key in `.env.local` as `VITE_DIGITRANSIT_API_KEY=<your key>`.
+4. Restart the dev server - Vite only reads env files at startup.
+
+`.env.local` is listed in `.gitignore` and must never be committed. Only
+variables prefixed with `VITE_` are exposed to the app, and they are compiled
+into the served bundle, so never commit a key or embed one in deployed code.
+
+## Verifying the data flow
+
+Run `npm run dev` and open the app. Below the page heading, a small debug
+panel reports the state of the data client:
+
+- an error box with the reason when the API key is missing or rejected, or
+  the connection fails;
+- "Loading tram line metadata..." while the keyed GraphQL query runs;
+- "Connecting to the tram position stream..." while the MQTT subscription
+  comes up;
+- once live, the number of trams currently tracked, the time of the last
+  snapshot, and a sample of positions. The full snapshot is also logged to
+  the devtools console every second.
+
+Positions and line metadata are produced by `src/lib/hfp.ts` and
+`src/lib/digitransit.ts`, and surfaced to UI code as `TramPosition` objects
+via the `useTramPositions()` hook (`src/hooks/useTramPositions.ts`).
+Rendering tram markers on a map is TV-0005's scope.

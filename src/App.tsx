@@ -1,3 +1,5 @@
+import { TramDebugPanel } from "./components/TramDebugPanel";
+
 export default function App() {
   return (
     <main className="app">
@@ -6,6 +8,7 @@ export default function App() {
         Live view of the HSL tram network. Map view arrives in TV-0003;
         digitransit data in TV-0004.
       </p>
+      <TramDebugPanel />
     </main>
   );
 }

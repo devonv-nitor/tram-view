@@ -26,3 +26,17 @@ body {
   text-align: center;
   padding: 1rem;
 }
+
+.debug-panel {
+  margin-top: 1.5rem;
+  padding: 1rem 1.25rem;
+  border: 1px solid #d0d0d8;
+  border-radius: 8px;
+  max-width: 40rem;
+  text-align: left;
+}
+
+.debug-panel--error {
+  border-color: #b3261e;
+  color: #b3261e;
+}
