@@ -23,7 +23,33 @@ body {
   height: 100dvh;
 }
 
+.app {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
 .map-view {
   width: 100%;
   height: 100%;
+}
+
+.debug-panel {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  z-index: 1000;
+  padding: 1rem 1.25rem;
+  border: 1px solid #d0d0d8;
+  border-radius: 8px;
+  max-width: 24rem;
+  max-height: calc(100% - 2rem);
+  overflow: auto;
+  background: #fff;
+  text-align: left;
+}
+
+.debug-panel--error {
+  border-color: #b3261e;
+  color: #b3261e;
 }
