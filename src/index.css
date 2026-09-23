@@ -38,14 +38,20 @@ body {
   position: absolute;
   top: 1rem;
   right: 1rem;
+  /* Leaflet control containers also use z-index 1000; the panel wins only
+     via DOM order, so keep the panel after <MapView /> in the JSX. */
   z-index: 1000;
   padding: 1rem 1.25rem;
   border: 1px solid #d0d0d8;
   border-radius: 8px;
-  max-width: 24rem;
-  max-height: calc(100% - 2rem);
+  /* Keep clear of the top-left zoom control on narrow viewports. */
+  max-width: min(24rem, calc(100% - 8rem));
+  /* Stay above the OSM attribution band at the bottom edge. */
+  max-height: calc(100% - 4rem);
   overflow: auto;
-  background: #fff;
+  /* Track color-scheme so panel text stays readable in dark mode. */
+  background: Canvas;
+  color: CanvasText;
   text-align: left;
 }
 
