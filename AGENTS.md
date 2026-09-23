@@ -38,9 +38,8 @@ handoff. An accepted ADR is authority to implement its decision.
   their findings are relayed to the successor explicitly. Queued messages
   are never the handoff mechanism: a delivered message wakes a stopped
   thread, so nothing of value is left queued on a dying thread.
-- On completion an agent launches a reviewer child: default Codex
-  `gpt-5.6-sol` at medium thinking; Claude Code `claude-opus-5[1m]` at medium
-  thinking is the fallback only when Codex is out of credits. The worker's
+- On completion an agent launches a reviewer child: default Claude Code
+  `claude-opus-5[1m]` at medium thinking. The worker's
   review request reports the exact origin tip SHA to review. Reviewers judge
   the diff (not the agent's report) against the task's requirements.
 - Reviewers judge only what is on the remote. At the start of every review
