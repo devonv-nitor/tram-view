@@ -225,6 +225,14 @@ class MqttWebSocketSubscription implements MqttSubscription {
     switch (control) {
       case CONTROL_CONNACK: {
         const returnCode = body.length > 1 ? body[1] : 0xff;
+        if (returnCode === 3) {
+          // Server unavailable is transient: retry with backoff.
+          this.handlers.onError(
+            new Error(`MQTT broker unavailable (code ${returnCode}); retrying`),
+          );
+          this.scheduleReconnect();
+          return;
+        }
         if (returnCode !== 0) {
           // A refused connection (e.g. protocol error) is terminal, not a
           // transient drop worth retrying.
@@ -234,6 +242,7 @@ class MqttWebSocketSubscription implements MqttSubscription {
           this.close();
           return;
         }
+        this.setConnectionState("connected");
         this.reconnectAttempts = 0;
         this.nextPacketId += 1;
         this.send(subscribePacket(this.nextPacketId, this.topicFilter));
