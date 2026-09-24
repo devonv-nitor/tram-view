@@ -30,6 +30,14 @@ the metadata.
 variables prefixed with `VITE_` are exposed to the app, and they are compiled
 into the served bundle, so never commit a key or embed one in deployed code.
 
+For the deployed GitHub Pages site, the key comes from the repo secret
+`VITE_DIGITRANSIT_API_KEY` instead of `.env.local` (see
+[Docs/deployment.md](./deployment.md)); because it is inlined into the
+served bundle either way, the deployed key is public and must be
+domain-restricted at digitransit.fi. The policy and its accepted
+trade-offs are recorded in
+[Docs/ADR/0003-public-api-key-policy.md](./ADR/0003-public-api-key-policy.md).
+
 ## Verifying the data flow
 
 Run `npm run dev` and open the app. In the top-right corner of the map, a

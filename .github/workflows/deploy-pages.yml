@@ -1,11 +1,13 @@
 # Deploys the built site to GitHub Pages on every push to main.
 #
-# The build is intentionally key-less: .env.local is untracked, so CI
-# runners have no VITE_* variables and the deployed bundle contains no
-# digitransit API key. The public site therefore shows the app's
-# missing-key error path (Docs/ADR/0002-data-transport.md) - do not add a
-# VITE_* env entry here, because Vite inlines VITE_* values into the
-# served bundle. Setup and verification: Docs/deployment.md.
+# The build injects VITE_DIGITRANSIT_API_KEY from the repo secret of the
+# same name (human decision, coordinator thread 2026 session; to be
+# recorded in ADR-0003): Vite inlines it into the served bundle, so the
+# key MUST be domain/referer-restricted at digitransit.fi and treated as
+# public - revocable and cheap to rotate, never a high-value secret.
+# Do not put any other VITE_* value or a non-restricted key here, and do
+# not replace the repo secret with a literal. Docs/deployment.md has the
+# policy and verification steps.
 name: Deploy to GitHub Pages
 
 on:
@@ -30,6 +32,8 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run build
+        env:
+          VITE_DIGITRANSIT_API_KEY: ${{ secrets.VITE_DIGITRANSIT_API_KEY }}
       - uses: actions/upload-pages-artifact@v5
         with:
           path: dist
