@@ -19,6 +19,7 @@ providing an at-a-glance view of the state of the tram system.
 | ~~[TV-0009](Docs/ADR/0002-data-transport.md)~~ | DONE — Tram type (rolling stock category) on icons                |
 | ~~TV-0007~~                                    | DONE — MVP acceptance verified (local + deployed, no key in repo; merged at bd9a0ab) |
 | [TV-0012](Tasks/TV-0012-tram-type-counts.md)   | Per-type live counts in the status panel legend                   |
+| [TV-0013](Tasks/TV-0013-sparakoff-bar-car.md)  | SpåraKoff bar tram (car #175): special marker + panel entry       |
 
 Dependency flow: ~~TV-0002~~, ~~TV-0003~~, ~~TV-0004~~, ~~TV-0005~~,
 ~~TV-0006~~, ~~TV-0007~~, ~~TV-0008~~, ~~TV-0009~~, ~~TV-0010~~,
