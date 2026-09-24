@@ -53,17 +53,6 @@ ignored, holding the developer's own key (see
 local build and a CI build differ only in which key source fills the same
 variable.
 
-## One-time human step: enable Pages
-
-The workflow cannot enable Pages itself. A human with repo admin access
-must do this once:
-
-1. Open <https://github.com/devonv-nitor/tram-view/settings/pages>.
-2. Under **Build and deployment**, set **Source** to **GitHub Actions**.
-
-GitHub then creates the `github-pages` deployment environment the workflow's
-deploy job targets. Until this is done, the workflow's deploy job fails.
-
 ## Verifying the deployment
 
 1. On push to `main`, the **Deploy to GitHub Pages** workflow run completes

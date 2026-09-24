@@ -1,11 +1,14 @@
 # Tram view plan
 
-Status: `MVP shipped — TV-0003..TV-0011 merged (TV-0006 live, public key per ADR-0003); TV-0007 acceptance verified 2026-09-24; TV-0012 outstanding`
+Status: `All tasks complete — TV-0002..TV-0014 merged and verified (MVP accepted; ADR-0003 key policy live); post-MVP polish shipped through TV-0014. No outstanding work.`
 
 The application is a live view of all of the trams currently active in the HSL network,
 providing an at-a-glance view of the state of the tram system.
 
-## Outstanding work
+## Completed work
+
+All tasks are merged, delta-reviewed, and retired; `Tasks/` holds only the
+[_template.md](Tasks/_template.md) used for future task definitions.
 
 | Task                                           | Deliverable                                                       |
 | ---------------------------------------------- | ----------------------------------------------------------------- |
@@ -20,11 +23,10 @@ providing an at-a-glance view of the state of the tram system.
 | ~~TV-0007~~                                    | DONE — MVP acceptance verified (local + deployed, no key in repo; merged at bd9a0ab) |
 | ~~TV-0012~~                                    | DONE — Per-type live counts in the status panel legend            |
 | ~~TV-0013~~                                    | DONE — SpåraKoff bar tram (car #175): special marker + panel entry |
-| [TV-0014](Tasks/TV-0014-ui-cleanup.md)         | UI cleanup: hide empty Unknown row, no letters in tooltips        |
+| ~~TV-0014~~                                    | DONE — UI cleanup: hide empty Unknown row, no letters in tooltips |
 
-Dependency flow: ~~TV-0002~~, ~~TV-0003~~, ~~TV-0004~~, ~~TV-0005~~,
-~~TV-0006~~, ~~TV-0007~~, ~~TV-0008~~, ~~TV-0009~~, ~~TV-0010~~,
-~~TV-0011~~ — **all merged and verified; the MVP is shipped.** The deployed
-site is live at <https://devonv-nitor.github.io/tram-view/> (public key
-policy per ADR-0003). Post-MVP outstanding work: **TV-0012** (per-type
-live counts in the status panel legend).
+Dependency flow: TV-0002…TV-0014 — **all merged and verified; the MVP is
+shipped and the post-MVP polish wave (TV-0012..TV-0014) is complete.** The
+deployed site is live at <https://devonv-nitor.github.io/tram-view/>
+(public key policy per ADR-0003). New work: define tasks from
+[Tasks/_template.md](Tasks/_template.md).

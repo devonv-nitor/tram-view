@@ -14,9 +14,8 @@ handoff. An accepted ADR is authority to implement its decision.
 ## Agent coordination
 
 - Execute work with parallel subagents. Default worker provider is Pi with
-  Lyceum `lyceum/z-ai/glm-5.3-flash` and thinking at max reasoning (not
-  OpenRouter, not the aigw path); restart an agent on
-  failure. Never switch to Claude without explicit human authorization.
+  Lyceum `lyceum/z-ai/glm-5.3-flash` and thinking at max reasoning; restart
+  an agent on failure. Never switch to Claude without explicit human authorization.
 - The coordinator merges completed work once its reviewer PASS and required
   hosted checks are green; that standing authorization satisfies task
   `gatekeeper: human/user` fields (user decision 2026-09-15). Workers stop at
@@ -85,8 +84,6 @@ execution record; do not create a duplicate execution log.
   describing algorithms, fields, defaults, or command flags in prose.
 - Contracts own externally required behavior. ADRs own options, chosen decision,
   and why. Preserve requirements that code alone cannot explain.
-- Runbooks own executable commands, prerequisites, and non-obvious recovery
-  constraints. Link to them from tasks instead of copying their instructions.
 - Tasks contain remaining work, acceptance, blockers, and the latest necessary
   handoff only. Git owns historical attempts and completed-change evidence.
 - Update the owning document with a behavior change; remove superseded text.
