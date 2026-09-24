@@ -1,6 +1,6 @@
 ---
 id: TV-0014
-status: IN_PROGRESS
+status: REVIEW
 owner: agent
 gatekeeper: human
 required_approvals: []
