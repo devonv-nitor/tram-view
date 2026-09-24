@@ -14,8 +14,10 @@ providing an at-a-glance view of the state of the tram system.
 | ~~TV-0005~~                                     | DONE — Live tram markers (circles with line numbers)              |
 | [TV-0006](Tasks/TV-0006-github-pages.md)       | GitHub Pages deployment                                           |
 | [TV-0008](Tasks/TV-0008-tram-direction.md)     | Direction indication on tram icons                                |
+| [TV-0009](Tasks/TV-0009-tram-type.md)          | Tram type (rolling stock category) on icons                       |
 | [TV-0007](Tasks/TV-0007-mvp-acceptance.md)     | MVP acceptance verification                                       |
 
 Dependency flow: ~~TV-0002~~, ~~TV-0003~~, ~~TV-0004~~, ~~TV-0005~~ (all
-done) → {TV-0006, TV-0008} → TV-0007. TV-0008 should land before the
+done) → {TV-0006, TV-0008 → TV-0009} → TV-0007. TV-0008 and TV-0009
+both modify the tram icon, so they serialize; both land before the
 TV-0007 acceptance check.
