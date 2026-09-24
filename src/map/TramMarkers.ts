@@ -117,10 +117,10 @@ function createTramIcon(
 /** Tooltip text for one vehicle: the full model name (TV-0009). Unknown
  * types say so explicitly and name the vehicle number instead of a model.
  * Out-of-service vehicles (TV-0011) replace the "Line N" prefix with a
- * "not in service" hint and keep the model name. The SpåraKoff bar tram
- * (TV-0013) is identified by name with the same line prefix and no category
- * letter - the ranges' category A it does not belong to is an internal
- * detail. */
+ * "not in service" hint and keep the model name. No tooltip carries the
+ * internal category letter (TV-0014) - including the SpåraKoff bar tram
+ * (TV-0013), identified by name with the same line prefix; the ranges'
+ * category A it does not belong to is an internal detail. */
 function tooltipText(position: TramPosition, info: TramCategoryInfo): string {
   if (isSparakoffBarTram(position)) {
     const line =
@@ -135,7 +135,7 @@ function tooltipText(position: TramPosition, info: TramCategoryInfo): string {
       : `Line ${position.routeShortName}`;
   return info.model === null
     ? `${line} — Unknown tram type (vehicle ${position.vehicleNumber})`
-    : `${line} — ${info.model} (type ${info.category})`;
+    : `${line} — ${info.model}`;
 }
 
 export class TramMarkerLayer {
