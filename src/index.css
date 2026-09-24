@@ -18,7 +18,9 @@ body {
 }
 
 #root {
-  width: 100vw;
+  /* 100% (not 100vw) avoids horizontal overflow when a scrollbar is
+     present; .app inside is 100% either way. */
+  width: 100%;
   height: 100vh;
   height: 100dvh;
 }
@@ -56,6 +58,45 @@ body {
 }
 
 .debug-panel--error {
-  border-color: #b3261e;
-  color: #b3261e;
+  border-color: light-dark(#b3261e, #f2b8b5);
+  color: light-dark(#b3261e, #f2b8b5);
+}
+
+.debug-panel__status {
+  display: flex;
+  align-items: center;
+  margin: 0;
+}
+
+.status-dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  margin-right: 0.5rem;
+  border-radius: 50%;
+  background: light-dark(#137333, #34d399);
+}
+
+/* Tram markers (TV-0005) sit on the OpenStreetMap raster tiles, which are
+   always light regardless of the UI color-scheme. Their colors are
+   therefore fixed rather than color-scheme aware: transit blue with white
+   text and a white ring stays readable over the light tiles in both UI
+   color schemes (contrast > 4.5:1 against the white ring and tiles).
+   Recorded in Docs/ADR/0001-map-library.md. */
+.tram-marker {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  background: #007ac9;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: -0.2px;
+  white-space: nowrap;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
 }
