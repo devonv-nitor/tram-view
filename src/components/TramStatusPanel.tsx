@@ -6,8 +6,9 @@ import { TRAM_CATEGORY_LEGEND } from "../lib/fleet.ts";
  * importantly the missing or rejected digitransit API key - and progress
  * text while the metadata query or the MQTT subscription is still coming
  * up. While live it also shows the color legend for the tram rolling
- * stock categories shown on the map markers (TV-0009). Tram positions
- * themselves render as map markers (TV-0005). */
+ * stock categories shown on the map markers (TV-0009) and the red
+ * not-in-service dot entry for out-of-service trams (TV-0011). Tram
+ * positions themselves render as map markers (TV-0005). */
 export function TramStatusPanel({ trams }: { trams: TramPositionsState }) {
   if (trams.error !== null) {
     return (
@@ -47,7 +48,7 @@ export function TramStatusPanel({ trams }: { trams: TramPositionsState }) {
           <> &middot; updated {trams.updatedAt.toLocaleTimeString()}</>
         )}
       </p>
-      <ul className="legend" aria-label="Tram type color legend">
+      <ul className="legend" aria-label="Tram marker color legend">
         {TRAM_CATEGORY_LEGEND.map((category) => (
           <li key={category.category} className="legend__item">
             <span
@@ -57,6 +58,16 @@ export function TramStatusPanel({ trams }: { trams: TramPositionsState }) {
             {category.label}
           </li>
         ))}
+        {/* TV-0011: out-of-service trams keep their category color and
+            replace the line number with a red dot - not a vehicle type, so
+            it sits after the category entries. */}
+        <li className="legend__item">
+          <span
+            className="legend__swatch legend__swatch--offline"
+            aria-hidden="true"
+          />
+          Red dot — Not in service (shunting/testing)
+        </li>
       </ul>
     </section>
   );

@@ -5,7 +5,10 @@
  *    digitransit API key; a missing key surfaces as a clear error),
  * 2. subscribe to the HFP MQTT tram-position stream (no key needed),
  * 3. deduplicate to the latest position per vehicle, drop vehicles whose
- *    latest position went stale, filter to displayed tram lines, and expose
+ *    latest position went stale, and resolve each vehicle's line short name -
+ *    a vehicle whose route resolves to no displayed tram line (depot
+ *    shunting/testing, an absent route) is kept and rendered out of service
+ *    (TV-0011), not dropped - and expose
  *    a snapshot that refreshes every second - producing a new snapshot only
  *    when the displayed data actually changed, so consumers re-render only
  *    on real updates.
@@ -137,9 +140,16 @@ export function useTramPositions(): TramPositionsState {
         }
         const positions: TramPosition[] = [];
         for (const latest of latestPositionsRef.current.values()) {
-          const routeShortName = resolveTramShortName(index, latest.routeId);
-          if (routeShortName === null) continue;
-          positions.push({ ...latest, routeShortName });
+          // TV-0011: a vehicle whose route resolves to no displayed tram line
+          // (depot shunting/testing, absent routes like 1009TX) stays in the
+          // snapshot with routeShortName null and renders out of service
+          // (red dot, TV-0009 category color kept) instead of being dropped.
+          // Vehicles whose latest position went stale are dropped above, so
+          // TV-0005's disappearance behavior is unchanged.
+          positions.push({
+            ...latest,
+            routeShortName: resolveTramShortName(index, latest.routeId),
+          });
         }
         const connected = connectedRef.current;
         // A dead stream with a known reason stays "error" durably; consumers

@@ -19,6 +19,12 @@
   --tram-type-b: #00a664;
   --tram-type-c: #00bbe7;
   --tram-type-unknown: #5f6368;
+  /* Out-of-service signal (TV-0011): the not-in-service dot shown inside a
+     marker body when the vehicle's route resolves to no displayed tram line.
+     A saturated red distinct from all three category hues and from the
+     unknown gray; the white ring below keeps it readable on every body
+     color, including on the light OSM tiles (fixed like the markers). */
+  --tram-type-offline: #d32f2f;
 }
 
 * {
@@ -177,6 +183,35 @@ body {
   background: var(--tram-type-unknown);
 }
 
+/* Not-in-service dot (TV-0011): replaces the line label on an out-of-service
+   marker (routeShortName null). Both children of .tram-marker are positioned;
+   the dot sits centered under the label span and paints above the rotor's
+   shape like the label does. The white ring separates it from the body color
+   on every category, red included. Hidden by default; the offline modifier
+   class below swaps label and dot visibility, so the flip is one class
+   toggle with no element churn. */
+.tram-marker__dot {
+  position: relative;
+  display: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--tram-type-offline);
+  border: 1.5px solid #fff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+}
+
+/* Out-of-service marker (TV-0011): hide the line label, show the dot. The
+   TV-0009 category class still colors the body, and TV-0008 rotation is
+   untouched. */
+.tram-marker--offline .tram-marker__label {
+  display: none;
+}
+
+.tram-marker--offline .tram-marker__dot {
+  display: block;
+}
+
 /* A position without heading information (rare in live data) renders
    without a direction: round off the point, leaving the plain TV-0005
    circle. */
@@ -244,4 +279,11 @@ body {
 
 .legend__swatch--unknown {
   background: var(--tram-type-unknown);
+}
+
+/* Out-of-service legend entry (TV-0011): a red dot, mirroring the marker's
+   not-in-service dot rather than the square category swatches. */
+.legend__swatch--offline {
+  background: var(--tram-type-offline);
+  border-radius: 50%;
 }
