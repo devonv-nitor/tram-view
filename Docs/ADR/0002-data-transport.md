@@ -130,9 +130,11 @@ Option C.
 - The HFP topic/payload structure is an HSL-specific contract; parsing is
   isolated in `src/lib/hfp.ts`. If HSL extends the topic structure, only that
   module needs updating.
-- Positions are not filtered by staleness in TV-0004 (latest per vehicle is
-  kept); TV-0005's rendering work may add a staleness cutoff for inactive
-  vehicles.
+- TV-0004 kept the latest position per vehicle without a staleness filter;
+  TV-0005 added one (`POSITION_STALENESS_MS` in `src/hooks/useTramPositions.ts`)
+  that drops vehicles which stop publishing, and also closes the stream
+  while the tab is hidden (reopening it on focus), so a hidden tab pulls no
+  feed traffic and generates no API requests.
 - The in-repo MQTT client covers subscribe-only QoS 0 usage; if the app later
   needs publish or QoS 1+, or if dependency policy allows a package.json
   change, a general MQTT library could replace `src/lib/mqtt.ts` - revisit

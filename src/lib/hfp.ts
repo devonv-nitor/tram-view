@@ -84,8 +84,12 @@ export function parseHfpPosition(payload: string): HfpVehiclePosition | null {
   };
 }
 
-/** Stable identity of one tram vehicle. */
-export function vehicleKey(position: HfpVehiclePosition): string {
+/** Stable identity of one tram vehicle. Accepts the minimal fields any
+ * position shape carries (HFP messages and filtered TramPosition alike). */
+export function vehicleKey(position: {
+  operatorId: number;
+  vehicleNumber: number;
+}): string {
   return `${position.operatorId}/${position.vehicleNumber}`;
 }
 

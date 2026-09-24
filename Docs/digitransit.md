@@ -32,19 +32,22 @@ into the served bundle, so never commit a key or embed one in deployed code.
 
 ## Verifying the data flow
 
-Run `npm run dev` and open the app. Below the page heading, a small debug
-panel reports the state of the data client:
+Run `npm run dev` and open the app. In the top-right corner of the map, a
+small status panel (`src/components/TramStatusPanel.tsx`) reports the state
+of the data client:
 
 - an error box with the reason when the API key is missing or rejected, or
   the connection fails;
 - "Loading tram line metadata..." while the keyed GraphQL query runs;
 - "Connecting to the tram position stream..." while the MQTT subscription
   comes up;
-- once live, the number of trams currently tracked, the time of the last
-  snapshot, and a sample of positions. The full snapshot is also logged to
-  the devtools console every second.
+- once live, a status line with the number of trams currently tracked and
+  the time of the last position change.
 
 Positions and line metadata are produced by `src/lib/hfp.ts` and
 `src/lib/digitransit.ts`, and surfaced to UI code as `TramPosition` objects
 via the `useTramPositions()` hook (`src/hooks/useTramPositions.ts`).
-Rendering tram markers on a map is TV-0005's scope.
+`src/map/MapView.tsx` renders the live markers (one circle per vehicle with
+the line short name inside, managed by `src/map/TramMarkers.ts`). While the
+tab is hidden, the position stream and the one-second snapshot tick pause
+entirely and resume on focus, so a hidden tab pulls no feed traffic.
