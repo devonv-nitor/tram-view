@@ -29,6 +29,15 @@ that reports under both a service route and an out-of-service route shows
 whichever event arrived last, and vehicles that stop publishing still
 disappear after the staleness cutoff.
 
+Special case (TV-0013): HSL car #175 - the SpåraKoff bar tram - is detected
+by identity, `operatorId === 40 && vehicleNumber === 175` on the latest
+position (`src/lib/fleet.ts`), never by `desi`, route id, or line metadata,
+and whenever it reports it is rendered with its own marker color
+(`--tram-type-sparakoff`, rgb(235, 79, 73)) and a `K` in place of the line
+number - even when its route resolves to no displayed line, where any other
+vehicle would show the red dot - plus its own legend entry; it never tallies
+into the MLNRV (category A) count the number ranges would otherwise give it.
+
 ## API key setup
 
 1. Register for a digitransit subscription key at
@@ -64,8 +73,9 @@ of the data client:
   the time of the last update, plus a color legend for the tram rolling
   stock categories (`src/lib/fleet.ts`) shown on the map markers, each
   category entry carrying its live count of trams currently in the
-  snapshot (TV-0012), and a red-dot entry for out-of-service trams
-  (TV-0011).
+  snapshot (TV-0012), a SpåraKoff entry only while car #175 is in the
+  snapshot (TV-0013 - never a zero-count row), and a red-dot entry for
+  out-of-service trams (TV-0011).
 
 Positions and line metadata are produced by `src/lib/hfp.ts` and
 `src/lib/digitransit.ts`, and surfaced to UI code as `TramPosition` objects
@@ -75,6 +85,7 @@ per vehicle: the line short name inside the rounded body, the body colored
 by the vehicle's rolling stock category, the point rotated toward the
 vehicle's reported heading, and a hover tooltip with the full model name,
 managed by `src/map/TramMarkers.ts`; an out-of-service vehicle swaps the
-line short name for the red not-in-service dot).
+line short name for the red not-in-service dot, and the SpåraKoff bar tram
+(TV-0013) always shows its `K` and its own color instead of both).
 While the tab is hidden, the position stream and the one-second snapshot tick pause
 entirely and resume on focus, so a hidden tab pulls no feed traffic.

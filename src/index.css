@@ -25,6 +25,13 @@
      unknown gray; the white ring below keeps it readable on every body
      color, including on the light OSM tiles (fixed like the markers). */
   --tram-type-offline: #d32f2f;
+  /* SpåraKoff bar tram interior (TV-0013): rgb(235, 79, 73) exactly as the
+     user specified for car #175's own marker look, applied whenever the car
+     reports (identity: operator 40 + vehicle 175, see src/lib/fleet.ts). A
+     red distinct from the offline dot red above and from every category
+     hue; like the brand A/B/C bodies it is light enough that the label ink
+     switches to dark (contrast below). */
+  --tram-type-sparakoff: #eb4f49;
 }
 
 * {
@@ -183,6 +190,14 @@ body {
   background: var(--tram-type-unknown);
 }
 
+/* SpåraKoff bar tram (TV-0013): car #175's own body color, winning over the
+   category colors for that car only (markerSlug in TramMarkers.ts). The
+   TV-0008 teardrop geometry and rotation are identical to every other
+   marker. */
+.tram-marker--sparakoff .tram-marker__shape {
+  background: var(--tram-type-sparakoff);
+}
+
 /* Not-in-service dot (TV-0011): replaces the line label on an out-of-service
    marker (routeShortName null). Both children of .tram-marker are positioned;
    the dot sits centered under the label span and paints above the rotor's
@@ -228,10 +243,14 @@ body {
 /* TV-0010 brand hues: A/B/C bodies are light, so the white ink inherited
    from .tram-marker would fall far below the >=4.5:1 the :root comment
    documents (worst 1.7:1 on the amber); #1a1a1a restores >=5.5:1 on all
-   three. The unknown body keeps the white ink (6:1 on its mid gray). */
+   three. The unknown body keeps the white ink (6:1 on its mid gray).
+   TV-0013: the SpåraKoff body (rgb(235, 79, 73), luminance 0.237) gets the
+   same dark ink - white falls to 3.65:1 on it while #1a1a1a meets
+   4.76:1 (contrast checked like TV-0010). */
 .tram-marker--a .tram-marker__label,
 .tram-marker--b .tram-marker__label,
-.tram-marker--c .tram-marker__label {
+.tram-marker--c .tram-marker__label,
+.tram-marker--sparakoff .tram-marker__label {
   color: #1a1a1a;
 }
 
@@ -279,6 +298,13 @@ body {
 
 .legend__swatch--unknown {
   background: var(--tram-type-unknown);
+}
+
+/* SpåraKoff legend entry (TV-0013): a square category-style swatch in car
+   #175's own body color; the entry itself is rendered by the panel only
+   while the car is in the current snapshot (never a zero-count row). */
+.legend__swatch--sparakoff {
+  background: var(--tram-type-sparakoff);
 }
 
 /* Out-of-service legend entry (TV-0011): a red dot, mirroring the marker's
