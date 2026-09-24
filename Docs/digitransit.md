@@ -79,6 +79,16 @@ of the data client:
   (TV-0013 - never a zero-count row), and a red-dot entry for
   out-of-service trams (TV-0011).
 
+TV-0015: the panel is collapsible with one click/tap. The chevron button in
+its header row collapses it to a small semi-transparent circle pinned to the
+same top-right spot; one click/tap (on the header chevron when expanded, on
+the circle when collapsed) restores it. While the client is live the circle
+shows the live tram count as a compact glanceable indicator. While collapsed
+the panel content is unmounted - removed from the accessibility tree - and
+the circle button itself is the keyboard- and screen-reader-operable control
+(`aria-expanded`, the state in its aria-label). Collapse state is
+per-session only: every page load starts expanded, nothing is persisted.
+
 Positions and line metadata are produced by `src/lib/hfp.ts` and
 `src/lib/digitransit.ts`, and surfaced to UI code as `TramPosition` objects
 via the `useTramPositions()` hook (`src/hooks/useTramPositions.ts`).

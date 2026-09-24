@@ -62,13 +62,20 @@ body {
   height: 100%;
 }
 
-.debug-panel {
+/* TV-0015: the collapsed panel's circle button shares the expanded panel's
+   exact top-right anchor - one spot, two states - so the anchor is a single
+   shared rule. */
+.debug-panel,
+.debug-panel-toggle {
   position: absolute;
   top: 1rem;
   right: 1rem;
   /* Leaflet control containers also use z-index 1000; the panel wins only
      via DOM order, so keep the panel after <MapView /> in the JSX. */
   z-index: 1000;
+}
+
+.debug-panel {
   padding: 1rem 1.25rem;
   border: 1px solid #d0d0d8;
   border-radius: 8px;
@@ -95,7 +102,19 @@ body {
   color: light-dark(#b3261e, #f2b8b5);
 }
 
+/* TV-0015: the header row holds the status line (or the error heading, or
+   the progress text) plus the one-click collapse button; it is the only
+   structural addition to the expanded panel. */
+.debug-panel__header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
 .debug-panel__status {
+  /* TV-0015: the status line fills the header row next to the collapse
+     button, so its layout inside the expanded panel is unchanged. */
+  flex: 1 1 auto;
   display: flex;
   align-items: center;
   margin: 0;
@@ -108,6 +127,72 @@ body {
   margin-right: 0.5rem;
   border-radius: 50%;
   background: light-dark(#137333, #34d399);
+}
+
+/* Collapse button (TV-0015): the one-click affordance in the expanded
+   panel's header row. 28px round target - above the 24px WCAG 2.5.8
+   minimum; the >=40px comfortable target is the collapsed circle below,
+   the primary affordance while collapsed. Transparent on the panel
+   background; the hairline border marks the target like the legend
+   swatches. */
+.debug-panel__collapse {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  padding: 0;
+  border: 1px solid color-mix(in srgb, CanvasText 25%, transparent);
+  border-radius: 50%;
+  background: none;
+  color: inherit;
+  cursor: pointer;
+}
+
+/* CSS-drawn chevron (TV-0015): a square's right+bottom borders rotated so
+   the corner points down in the expanded header (collapse) and up on the
+   collapsed circle (expand). Drawn in CSS instead of a text or emoji glyph
+   so it renders identically on every platform. */
+.debug-panel__collapse-chevron,
+.debug-panel-toggle__chevron {
+  width: 8px;
+  height: 8px;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+}
+
+.debug-panel__collapse-chevron {
+  transform: rotate(45deg);
+}
+
+.debug-panel-toggle__chevron {
+  transform: rotate(-135deg);
+}
+
+/* Collapsed circle (TV-0015): 40px round so the hit area is the circle
+   itself (the task's >=~40px target). Semi-transparent Canvas keeps it
+   color-scheme aware like the panel while letting the map show through;
+   the soft shadow separates it from the tiles like the markers. Shows the
+   live tram count while the client is live (worker's choice, documented in
+   the task evidence), else the expand chevron above. */
+.debug-panel-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  padding: 0;
+  border: 1px solid color-mix(in srgb, CanvasText 25%, transparent);
+  border-radius: 50%;
+  background: color-mix(in srgb, Canvas 70%, transparent);
+  color: CanvasText;
+  font: inherit;
+  font-size: 0.75rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+  cursor: pointer;
 }
 
 /* Tram markers (TV-0005, TV-0008) sit on the OpenStreetMap raster tiles, which

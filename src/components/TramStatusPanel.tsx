@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState, type RefObject } from "react";
 import type { TramPosition } from "../lib/digitransit.ts";
 import type { TramPositionsState } from "../hooks/useTramPositions";
 import {
@@ -27,6 +28,32 @@ function countByCategory(
   return counts;
 }
 
+/** TV-0015: the one-click collapse affordance in an expanded panel's header
+ * row - a click, tap, or Enter/Space collapses the panel to the top-right
+ * circle. aria-expanded is true: the panel this control toggles is currently
+ * expanded. The chevron is drawn in CSS (aria-hidden), not a text or emoji
+ * glyph, so it renders identically on every platform. */
+function PanelCollapseButton({
+  buttonRef,
+  onCollapse,
+}: {
+  buttonRef: RefObject<HTMLButtonElement | null>;
+  onCollapse: () => void;
+}) {
+  return (
+    <button
+      ref={buttonRef}
+      type="button"
+      className="debug-panel__collapse"
+      aria-expanded={true}
+      aria-label="Collapse the tram status panel"
+      onClick={onCollapse}
+    >
+      <span className="debug-panel__collapse-chevron" aria-hidden="true" />
+    </button>
+  );
+}
+
 /** Compact status indicator for the live tram data client (TV-0004): one
  * status line while live, an error box when the client fails - most
  * importantly the missing or rejected digitransit API key - and progress
@@ -37,12 +64,80 @@ function countByCategory(
  * bar tram entry while car #175 reports (TV-0013 - hidden entirely when it
  * is absent, never a zero-count row), and the red
  * not-in-service dot entry for out-of-service trams (TV-0011). Tram
- * positions themselves render as map markers (TV-0005). */
+ * positions themselves render as map markers (TV-0005). TV-0015: the panel
+ * is collapsible - one click/tap on the header collapse button folds it to
+ * the top-right circle (same anchor, one shared rule in index.css), one
+ * click/tap on the circle restores it; the state is per-session component
+ * state, expanded on every load, never persisted. */
 export function TramStatusPanel({ trams }: { trams: TramPositionsState }) {
+  // TV-0015: per-session collapse state - the panel is expanded on every
+  // load and never persisted (no localStorage).
+  const [collapsed, setCollapsed] = useState(false);
+  const expandRef = useRef<HTMLButtonElement | null>(null);
+  const collapseRef = useRef<HTMLButtonElement | null>(null);
+
+  // TV-0015: the focused toggle unmounts on collapse (the header button) and
+  // on expand (the circle), which would drop keyboard focus to <body>. Move
+  // focus to the other affordance once the DOM has swapped. Comparing
+  // against the previous state (instead of a mounted flag) keeps
+  // StrictMode's double effect pass from stealing focus on page load.
+  const prevCollapsed = useRef<boolean | null>(null);
+  useEffect(() => {
+    const wasCollapsed = prevCollapsed.current;
+    prevCollapsed.current = collapsed;
+    if (wasCollapsed === null || wasCollapsed === collapsed) return;
+    (collapsed ? expandRef : collapseRef).current?.focus();
+  }, [collapsed]);
+
+  // TV-0015 collapsed circle: the panel's collapsed representation, pinned
+  // to the same top-right spot as the expanded panel (one shared anchor in
+  // index.css) and a real button - the keyboard- and screen-reader-operable
+  // control while collapsed (aria-expanded false, the state in its label);
+  // the expanded panel is unmounted, so nothing hidden lingers in the
+  // accessibility tree. Worker's choice: while the client is live the
+  // circle shows the live tram count as a compact glanceable indicator -
+  // the one thing the panel surfaces at a glance - updating with every
+  // snapshot because this component re-renders on each one; a plain expand
+  // chevron shows while loading, connecting, or errored.
+  if (collapsed) {
+    const liveCount =
+      trams.error === null && trams.status === "live"
+        ? trams.positions.length
+        : null;
+    const label =
+      liveCount !== null
+        ? `Show the live tram status panel, ${liveCount} trams`
+        : trams.error !== null
+          ? "Show the tram data error panel"
+          : "Show the tram status panel";
+    return (
+      <button
+        ref={expandRef}
+        type="button"
+        className="debug-panel-toggle"
+        aria-expanded={false}
+        aria-label={label}
+        onClick={() => setCollapsed(false)}
+      >
+        {liveCount !== null ? (
+          <span className="debug-panel-toggle__count">{liveCount}</span>
+        ) : (
+          <span className="debug-panel-toggle__chevron" aria-hidden="true" />
+        )}
+      </button>
+    );
+  }
+
   if (trams.error !== null) {
     return (
       <section aria-live="polite" className="debug-panel debug-panel--error">
-        <h2>Tram data error</h2>
+        <div className="debug-panel__header">
+          <h2>Tram data error</h2>
+          <PanelCollapseButton
+            buttonRef={collapseRef}
+            onCollapse={() => setCollapsed(true)}
+          />
+        </div>
         <p>{trams.error.message}</p>
       </section>
     );
@@ -51,7 +146,13 @@ export function TramStatusPanel({ trams }: { trams: TramPositionsState }) {
   if (trams.status === "loading") {
     return (
       <section aria-live="polite" className="debug-panel">
-        <p>Loading tram line metadata...</p>
+        <div className="debug-panel__header">
+          <p>Loading tram line metadata...</p>
+          <PanelCollapseButton
+            buttonRef={collapseRef}
+            onCollapse={() => setCollapsed(true)}
+          />
+        </div>
       </section>
     );
   }
@@ -59,7 +160,13 @@ export function TramStatusPanel({ trams }: { trams: TramPositionsState }) {
   if (trams.status === "connecting") {
     return (
       <section aria-live="polite" className="debug-panel">
-        <p>Connecting to the tram position stream...</p>
+        <div className="debug-panel__header">
+          <p>Connecting to the tram position stream...</p>
+          <PanelCollapseButton
+            buttonRef={collapseRef}
+            onCollapse={() => setCollapsed(true)}
+          />
+        </div>
       </section>
     );
   }
@@ -80,13 +187,19 @@ export function TramStatusPanel({ trams }: { trams: TramPositionsState }) {
       className="debug-panel"
       aria-label="Live tram data status"
     >
-      <p className="debug-panel__status">
-        <span className="status-dot" aria-hidden="true" />
-        Live &middot; {trams.positions.length} trams
-        {trams.updatedAt !== null && (
-          <> &middot; updated {trams.updatedAt.toLocaleTimeString()}</>
-        )}
-      </p>
+      <div className="debug-panel__header">
+        <p className="debug-panel__status">
+          <span className="status-dot" aria-hidden="true" />
+          Live &middot; {trams.positions.length} trams
+          {trams.updatedAt !== null && (
+            <> &middot; updated {trams.updatedAt.toLocaleTimeString()}</>
+          )}
+        </p>
+        <PanelCollapseButton
+          buttonRef={collapseRef}
+          onCollapse={() => setCollapsed(true)}
+        />
+      </div>
       <ul className="legend" aria-label="Tram marker color legend">
         {TRAM_CATEGORY_LEGEND.map((category) => {
           // TV-0014: the Unknown type row renders only while an unknown
