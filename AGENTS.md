@@ -63,6 +63,12 @@ For a ready task: mark `IN_PROGRESS`, implement only its allowed paths, run its
 checks plus relevant live verification, self-review the diff, then mark `REVIEW`
 and `DONE` when acceptance is met. Serialize repository writes. Delete the task from `tasks/` and `PLAN.md` after completion.
 
+New task files follow [Tasks/_template.md](Tasks/_template.md): copy it (do not
+edit it in place), name the copy `Tasks/TV-XXXX-short-slug.md` with the next
+free TV id, fill every front-matter field and section, and write requirements
+and acceptance as checkable statements with explicit honest-verification rules.
+`_template.md` itself is never assigned, implemented, or deleted.
+
 Retry a failed approach twice for the same failure, changing the approach. After the retry limit, record `STOP-FAILED` and the evidence; do not conceal the failure.
 
 Commit bodies and handoffs use only the
