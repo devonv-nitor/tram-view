@@ -146,6 +146,20 @@ Option C.
   "1"/"2") is not used for the icon because it is not a physical heading;
   a layover tram is drawn pointing where it faces (`hdg`), not where its
   journey points.
+- TV-0009 (rolling stock category on the icons) is a rendering-only choice
+  over this decision - no additional requests and no change to the transport
+  or refresh balance. The category source was verified live on 2026-09-24
+  (evidence in the TV-0009 commit record): neither the HFP VP payload nor
+  the keyed GraphQL metadata identifies a vehicle's model. The VP payload
+  carries no make/model/subtype field (47,852 tram messages over 100 s,
+  22 distinct fields; the vehicle identity is `oper` + `veh` only), and the
+  Routing API GraphQL exposes no tram-vehicle query (introspection lists
+  only rental-vehicle/parking queries; the `routes` metadata Tram View
+  holds is per-line, `gtfsId`/`shortName`/`mode`). Categories therefore come
+  from the vehicle number the TV-0004 client already parses (car-number
+  ranges in `src/lib/fleet.ts`: 0-399 A, 400-499 B, 600-699 C); numbers
+  outside the mapped ranges (e.g. 5xx) render as unknown rather than being
+  relabeled.
 - The in-repo MQTT client covers subscribe-only QoS 0 usage; if the app later
   needs publish or QoS 1+, or if dependency policy allows a package.json
   change, a general MQTT library could replace `src/lib/mqtt.ts` - revisit

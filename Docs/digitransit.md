@@ -9,7 +9,7 @@ polling) is recorded in
 
 | Data | Transport | API key |
 | ---- | --------- | ------- |
-| Tram vehicle positions (lat/lon, heading, speed, direction, route id) | HFP MQTT over WebSockets, `wss://mqtt.hsl.fi:443/`, topic `/hfp/v2/journey/ongoing/vp/tram/#` (push, ~1 update/s per vehicle) | not needed |
+| Tram vehicle positions (lat/lon, heading, speed, direction, route id, vehicle number) | HFP MQTT over WebSockets, `wss://mqtt.hsl.fi:443/`, topic `/hfp/v2/journey/ongoing/vp/tram/#` (push, ~1 update/s per vehicle) | not needed |
 | Tram line metadata (route id -> short name, mode) | Routing API v2 GraphQL, `POST https://api.digitransit.fi/routing/v2/hsl/gtfs/v1`, query `routes { gtfsId shortName mode }`, fetched once per session and cached | required |
 
 The positions subscription is anonymous. The line-metadata query requires a
@@ -42,13 +42,16 @@ of the data client:
 - "Connecting to the tram position stream..." while the MQTT subscription
   comes up;
 - once live, a status line with the number of trams currently tracked and
-  the time of the last update.
+  the time of the last update, plus a color legend for the tram rolling
+  stock categories (`src/lib/fleet.ts`) shown on the map markers.
 
 Positions and line metadata are produced by `src/lib/hfp.ts` and
 `src/lib/digitransit.ts`, and surfaced to UI code as `TramPosition` objects
 via the `useTramPositions()` hook (`src/hooks/useTramPositions.ts`).
 `src/map/MapView.tsx` renders the live markers (one teardrop-shaped marker
-per vehicle: the line short name inside the rounded body, the point rotated
-toward the vehicle's reported heading, managed by `src/map/TramMarkers.ts`).
+per vehicle: the line short name inside the rounded body, the body colored
+by the vehicle's rolling stock category, the point rotated toward the
+vehicle's reported heading, and a hover tooltip with the full model name,
+managed by `src/map/TramMarkers.ts`).
 While the tab is hidden, the position stream and the one-second snapshot tick pause
 entirely and resume on focus, so a hidden tab pulls no feed traffic.
