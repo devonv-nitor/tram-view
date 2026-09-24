@@ -42,12 +42,13 @@ of the data client:
 - "Connecting to the tram position stream..." while the MQTT subscription
   comes up;
 - once live, a status line with the number of trams currently tracked and
-  the time of the last position change.
+  the time of the last update.
 
 Positions and line metadata are produced by `src/lib/hfp.ts` and
 `src/lib/digitransit.ts`, and surfaced to UI code as `TramPosition` objects
 via the `useTramPositions()` hook (`src/hooks/useTramPositions.ts`).
-`src/map/MapView.tsx` renders the live markers (one circle per vehicle with
-the line short name inside, managed by `src/map/TramMarkers.ts`). While the
-tab is hidden, the position stream and the one-second snapshot tick pause
+`src/map/MapView.tsx` renders the live markers (one teardrop-shaped marker
+per vehicle: the line short name inside the rounded body, the point rotated
+toward the vehicle's reported heading, managed by `src/map/TramMarkers.ts`).
+While the tab is hidden, the position stream and the one-second snapshot tick pause
 entirely and resume on focus, so a hidden tab pulls no feed traffic.

@@ -58,10 +58,19 @@ Use **Leaflet 1.x** with **OpenStreetMap standard raster tiles**
   for this MVP.
 - Map center/zoom for the Helsinki tram network live in
   `src/map/constants.ts`; TV-0005 reads them from there.
-- Tram markers (TV-0005) are fixed-color `divIcon` circles — transit blue
-  (#007ac9) with white text and a white ring — because the OSM raster
-  basemap is always light regardless of the UI `color-scheme`; the markers
-  deliberately do not follow dark mode, while panel and other UI chrome do.
+- Tram markers (TV-0005, TV-0008) are fixed-color `divIcon` teardrops -
+  transit blue (#007ac9) with white text and a white ring - because the OSM
+  raster basemap is always light regardless of the UI `color-scheme`; the
+  markers deliberately do not follow dark mode, while panel and other UI
+  chrome do.
+- TV-0008 (direction indication) is a pure rendering choice over this
+  decision: each marker body stays a fixed-size `divIcon` centered on the
+  vehicle position, with a teardrop shape whose point is rotated toward the
+  vehicle's heading by a CSS rotor (`src/map/TramMarkers.ts` +
+  `src/index.css`). The heading comes from the HFP subscription Tram View
+  already holds (ADR-0002), so no extra request, marker, or map-layer change
+  was needed; the rotation is one inline `transform` write per update, well
+  within the marker comfort zone above.
 - Revisit this decision if marker updates grow beyond Leaflet's comfort zone
   (roughly thousands of simultaneously animated markers) or if vector basemap
   styling becomes a product requirement — the switch point is MapLibre GL JS.
