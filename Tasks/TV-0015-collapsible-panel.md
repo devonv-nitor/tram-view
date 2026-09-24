@@ -39,11 +39,10 @@ collapsible:
   keyboard-accessible (`button` semantics, aria-expanded /
   aria-label; the collapsed circle must be reachable and operable by
   keyboard and screen reader, not just a decorative div).
-- Mobile: verify the collapsed circle does not block map gestures and
-  the expanded panel still scrolls/overflows sanely on a small
-  viewport (use device-emulation in the verification browser; do not
-  invent new breakpoint logic unless the current layout already has
-  some — reuse it).
+  Mobile behavior is verified manually by the user after merge — do
+  not device-emulate; just keep the implementation free of
+  breakpoint assumptions and note anything that might behave
+  differently on small viewports in `Known limitations`.
 - Presentation-only: no changes to data flow, snapshot logic, MQTT,
   or marker layers.
 
@@ -54,8 +53,6 @@ collapsible:
   semi-transparent circle in the top-right; one click restores
   identically; repeat twice. Verify the toggle with a click (not just
   programmatic class flips) and capture both states.
-- Mobile emulation (e.g. 390×844): both states sane; collapsed circle
-  does not swallow map pans; capture evidence.
 - Keyboard: tab reaches the toggle, Enter/Space toggles, aria-expanded
   reflects state.
 - `npm run lint`, `npm run format:check`, `npm run build` green; no
