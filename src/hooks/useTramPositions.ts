@@ -61,7 +61,10 @@ function toError(value: unknown): Error {
 }
 
 /** True when two snapshots would render identically. Only the fields the UI
- * displays are compared; a speed/heading-only change does not re-render. */
+ * displays are compared; a speed-only change does not re-render. Heading is
+ * displayed on the map icons (TV-0008), so a heading-only change with an
+ * otherwise frozen position - e.g. a tram reversing at a terminal layover -
+ * must re-render so the icon follows. */
 function positionsEqual(a: TramPosition[], b: TramPosition[]): boolean {
   if (a === b) return true;
   if (a.length !== b.length) return false;
@@ -73,7 +76,8 @@ function positionsEqual(a: TramPosition[], b: TramPosition[]): boolean {
       x.vehicleNumber !== y.vehicleNumber ||
       x.routeShortName !== y.routeShortName ||
       x.lat !== y.lat ||
-      x.lon !== y.lon
+      x.lon !== y.lon ||
+      x.heading !== y.heading
     ) {
       return false;
     }

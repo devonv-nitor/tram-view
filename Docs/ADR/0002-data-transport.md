@@ -135,6 +135,17 @@ Option C.
   that drops vehicles which stop publishing, and also closes the stream
   while the tab is hidden (reopening it on focus), so a hidden tab pulls no
   feed traffic and generates no API requests.
+- TV-0008 (direction indication on the icons) consumes the `hdg` field the
+  VP payload already carries - a pure rendering choice over this decision,
+  no additional requests and no change to the transport or refresh balance.
+  Verified against live data on 2026-09-24 (38,404 tram VP messages over 90
+  s, evidence in the TV-0008 commit record): `hdg` is present on ~100% of
+  messages; for moving vehicles it matches the bearing between consecutive
+  positions within ~1.2° mean; for stopped vehicles (`spd` 0) it persists
+  (never 0/null, stable per vehicle). The journey direction (`dir`,
+  "1"/"2") is not used for the icon because it is not a physical heading;
+  a layover tram is drawn pointing where it faces (`hdg`), not where its
+  journey points.
 - The in-repo MQTT client covers subscribe-only QoS 0 usage; if the app later
   needs publish or QoS 1+, or if dependency policy allows a package.json
   change, a general MQTT library could replace `src/lib/mqtt.ts` - revisit

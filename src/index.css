@@ -77,8 +77,8 @@ body {
   background: light-dark(#137333, #34d399);
 }
 
-/* Tram markers (TV-0005) sit on the OpenStreetMap raster tiles, which are
-   always light regardless of the UI color-scheme. Their colors are
+/* Tram markers (TV-0005, TV-0008) sit on the OpenStreetMap raster tiles, which
+   are always light regardless of the UI color-scheme. Their colors are
    therefore fixed rather than color-scheme aware: transit blue with white
    text and a white ring stays readable over the light tiles in both UI
    color schemes (contrast > 4.5:1 against the white ring and tiles).
@@ -89,14 +89,54 @@ body {
   justify-content: center;
   width: 28px;
   height: 28px;
-  border: 2px solid #fff;
-  border-radius: 50%;
-  background: #007ac9;
   color: #fff;
   font-size: 11px;
   font-weight: 600;
   line-height: 1;
   letter-spacing: -0.2px;
   white-space: nowrap;
+}
+
+/* Rotor (TV-0008): rotated inline by TramMarkers.ts to the vehicle's
+   heading - degrees map directly to rotation because the map is north-up.
+   It spins only the shape around the marker body; the line label is a
+   sibling outside the rotor, so the number stays upright and readable at
+   any heading. */
+.tram-marker__rotor {
+  position: absolute;
+  inset: 0;
+}
+
+/* Teardrop body (TV-0008): rounded at the rear, tapering to a point at the
+   front, like an ice cream cone. The square is rotated 135deg so its one
+   unrounded corner (bottom-left) points north at zero heading; the three
+   50% corners form a circular body centered on the vehicle position
+   (iconAnchor keeps that center there), with the point leading in the
+   heading direction. The point extends past the marker box; nothing
+   clips it. */
+.tram-marker__shape {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 28px;
+  height: 28px;
+  margin: -14px 0 0 -14px;
+  border: 2px solid #fff;
+  border-radius: 50% 50% 50% 0;
+  background: #007ac9;
+  transform: rotate(135deg);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+}
+
+/* A position without heading information (rare in live data) renders
+   without a direction: round off the point, leaving the plain TV-0005
+   circle. */
+.tram-marker--headingless .tram-marker__shape {
+  border-radius: 50%;
+}
+
+.tram-marker__label {
+  /* Both children of .tram-marker are positioned; DOM order puts the label
+     above the rotor's shape in paint order. */
+  position: relative;
 }
