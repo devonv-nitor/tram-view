@@ -73,8 +73,10 @@ of the data client:
   the time of the last update, plus a color legend for the tram rolling
   stock categories (`src/lib/fleet.ts`) shown on the map markers, each
   category entry carrying its live count of trams currently in the
-  snapshot (TV-0012), a SpåraKoff entry only while car #175 is in the
-  snapshot (TV-0013 - never a zero-count row), and a red-dot entry for
+  snapshot (TV-0012), the Unknown type entry only while an
+  unknown-numbered tram is in the snapshot (TV-0014 - never a zero-count
+  row), a SpåraKoff entry only while car #175 is in the snapshot
+  (TV-0013 - never a zero-count row), and a red-dot entry for
   out-of-service trams (TV-0011).
 
 Positions and line metadata are produced by `src/lib/hfp.ts` and

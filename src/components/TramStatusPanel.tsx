@@ -88,18 +88,27 @@ export function TramStatusPanel({ trams }: { trams: TramPositionsState }) {
         )}
       </p>
       <ul className="legend" aria-label="Tram marker color legend">
-        {TRAM_CATEGORY_LEGEND.map((category) => (
-          <li key={category.category} className="legend__item">
-            <span
-              className={`legend__swatch legend__swatch--${category.category.toLowerCase()}`}
-              aria-hidden="true"
-            />
-            {/* TV-0012: live count of trams of this type in the current
-                snapshot, prepended to the label from fleet.ts - the label
-                itself carries no count and no category letter. */}
-            ({counts[category.category]}) {category.label}
-          </li>
-        ))}
+        {TRAM_CATEGORY_LEGEND.map((category) => {
+          // TV-0014: the Unknown type row renders only while an unknown
+          // vehicle number is in the current snapshot - never a zero-count
+          // row, the same conditional pattern as the SpåraKoff entry below.
+          // The known category rows always render, with their live count.
+          if (category.category === "UNKNOWN" && counts.UNKNOWN === 0) {
+            return null;
+          }
+          return (
+            <li key={category.category} className="legend__item">
+              <span
+                className={`legend__swatch legend__swatch--${category.category.toLowerCase()}`}
+                aria-hidden="true"
+              />
+              {/* TV-0012: live count of trams of this type in the current
+                  snapshot, prepended to the label from fleet.ts - the label
+                  itself carries no count and no category letter. */}
+              ({counts[category.category]}) {category.label}
+            </li>
+          );
+        })}
         {/* TV-0013: the SpåraKoff bar tram has its own entry while car #175
             is in the current snapshot, in the TV-0012 format; it disappears
             entirely with the car - never a zero-count row. It sits with the
