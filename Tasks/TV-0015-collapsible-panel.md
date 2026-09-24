@@ -1,6 +1,6 @@
 ---
 id: TV-0015
-status: IN_PROGRESS
+status: REVIEW
 owner: agent
 gatekeeper: human
 required_approvals: []
@@ -63,3 +63,15 @@ collapsible:
 - Independent of all other tasks; nothing pending it.
 - Do not rename existing CSS hooks used by tests/verification in prior
   tasks (`.debug-panel` etc.) without updating Docs references.
+
+## Handoff (status: REVIEW → DONE — optional, delete before merge)
+
+- Implementation at the origin tip of
+  `bb/worker-tv-0015-collapsible-panel-thr_9ppbrhhbuw`; live-verified with
+  headless Chrome + CDP over the real feed (34/34 checks, evidence in the
+  commit body).
+- Worker's choice documented: the collapsed circle shows the live tram
+  count (updates with every snapshot); a chevron shows while loading,
+  connecting, or errored. Focus moves to the surviving affordance on
+  toggle. Mobile is verified manually by the user after merge; small-
+  viewport risks are in the commit's `Known limitations`.
