@@ -21,7 +21,9 @@ export interface TramCategoryInfo {
   category: TramCategory;
   /** Full advertised model name; null when the type is unknown. */
   model: string | null;
-  /** Legend label for the status panel, e.g. "A — MLNRV I/II (Valmet)". */
+  /** Legend label for the status panel, e.g. "MLNRV I/II (Valmet)" - the
+   * model name without any category letter (TV-0012: the letter is internal
+   * bookkeeping; the panel prepends the live count itself). */
   label: string;
 }
 
@@ -39,22 +41,22 @@ const CATEGORY_INFO: Record<TramCategory, TramCategoryInfo> = {
   A: {
     category: "A",
     model: "MLNRV I/II (Valmet)",
-    label: "A — MLNRV I/II (Valmet)",
+    label: "MLNRV I/II (Valmet)",
   },
   B: {
     category: "B",
     model: "Škoda Transtech Artic",
-    label: "B — Škoda Transtech Artic",
+    label: "Škoda Transtech Artic",
   },
   C: {
     category: "C",
     model: "Škoda Transtech Artic X54",
-    label: "C — Škoda Transtech Artic X54",
+    label: "Škoda Transtech Artic X54",
   },
   UNKNOWN: {
     category: "UNKNOWN",
     model: null,
-    label: "? — Unknown type",
+    label: "? Unknown type",
   },
 };
 
