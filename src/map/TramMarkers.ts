@@ -1,10 +1,13 @@
 /**
  * Imperative Leaflet marker layer for live tram markers (TV-0005, TV-0008,
- * TV-0009).
+ * TV-0009, TV-0011).
  * One directional marker per vehicle: a teardrop body with the line short
  * name inside, colored by the vehicle's rolling stock category, rotated so
  * its point faces the vehicle's reported heading, and carrying a native
- * `title` tooltip with the full model name.
+ * `title` tooltip with the full model name. A vehicle whose latest position
+ * resolves to no displayed tram line (TV-0011: depot shunting/testing,
+ * absent routes) keeps the category-colored body and heading rotation and
+ * shows a red not-in-service dot in place of the line number.
  * Direction source and live evidence (Tasks/TV-0008-tram-direction.md): the
  * HFP `hdg` field the payload already carries - verified live to match the
  * direction of travel and to persist for stopped vehicles - so no extra
@@ -57,7 +60,11 @@ function normalizeHeading(heading: number | null): number | null {
  * leaving the plain TV-0005 circle. Labels are tram line short names
  * already validated by isTramLineShortName (digits 1-15 with an optional
  * trailing letter, or a single letter), so they are safe as icon HTML.
- * The native `title` tooltip (TV-0009) is passed as a marker option -
+ * An out-of-service vehicle (routeShortName null, TV-0011) keeps the
+ * category-colored body and heading rotation and swaps the line label for
+ * the red not-in-service dot (CSS: .tram-marker--offline); the label span
+ * stays in the DOM, hidden, so the flip in either direction is one class
+ * toggle. The native `title` tooltip (TV-0009) is passed as a marker option -
  * Leaflet sets it on the icon element (Marker._initIcon) - so it is the
  * native browser tooltip on hover: hover reaches the icon because the
  * marker CSS re-enables pointer events that Leaflet disables for
@@ -68,24 +75,31 @@ function createTramIcon(
   info: TramCategoryInfo,
 ): L.DivIcon {
   const headingless = position.heading === null;
-  const className = `tram-marker tram-marker--${info.category.toLowerCase()}${headingless ? " tram-marker--headingless" : ""}`;
+  const offline = position.routeShortName === null;
+  const className = `tram-marker tram-marker--${info.category.toLowerCase()}${headingless ? " tram-marker--headingless" : ""}${offline ? " tram-marker--offline" : ""}`;
   const rotation = headingless
     ? ""
     : ` style="transform: rotate(${normalizeHeading(position.heading)}deg)"`;
   return L.divIcon({
     className,
-    html: `<div class="tram-marker__rotor"${rotation}><div class="tram-marker__shape"></div></div><span class="tram-marker__label">${position.routeShortName}</span>`,
+    html: `<div class="tram-marker__rotor"${rotation}><div class="tram-marker__shape"></div></div><span class="tram-marker__label">${position.routeShortName ?? ""}</span><span class="tram-marker__dot"></span>`,
     iconSize: [TRAM_MARKER_PX, TRAM_MARKER_PX],
     iconAnchor: TRAM_MARKER_CENTER,
   });
 }
 
 /** Tooltip text for one vehicle: the full model name (TV-0009). Unknown
- * types say so explicitly and name the vehicle number instead of a model. */
+ * types say so explicitly and name the vehicle number instead of a model.
+ * Out-of-service vehicles (TV-0011) replace the "Line N" prefix with a
+ * "not in service" hint and keep the model name. */
 function tooltipText(position: TramPosition, info: TramCategoryInfo): string {
+  const line =
+    position.routeShortName === null
+      ? "Not in service"
+      : `Line ${position.routeShortName}`;
   return info.model === null
-    ? `Line ${position.routeShortName} — Unknown tram type (vehicle ${position.vehicleNumber})`
-    : `Line ${position.routeShortName} — ${info.model} (type ${info.category})`;
+    ? `${line} — Unknown tram type (vehicle ${position.vehicleNumber})`
+    : `${line} — ${info.model} (type ${info.category})`;
 }
 
 export class TramMarkerLayer {
@@ -151,9 +165,18 @@ export class TramMarkerLayer {
       rotor.style.transform = transform;
       element.classList.toggle("tram-marker--headingless", headingless);
     }
+    // TV-0011: the out-of-service flip in either direction (service line <->
+    // no line, e.g. a vehicle reporting under both its route and 1009TX) is
+    // one class toggle: the label span and the red dot swap visibility in
+    // CSS, so no element is created or removed on a flicker.
+    const offline = position.routeShortName === null;
+    if (element.classList.contains("tram-marker--offline") !== offline) {
+      element.classList.toggle("tram-marker--offline", offline);
+    }
+    const labelText = position.routeShortName ?? "";
     const label = element.querySelector<HTMLElement>(".tram-marker__label");
-    if (label !== null && label.textContent !== position.routeShortName) {
-      label.textContent = position.routeShortName;
+    if (label !== null && label.textContent !== labelText) {
+      label.textContent = labelText;
     }
   }
 

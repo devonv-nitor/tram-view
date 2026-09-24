@@ -27,9 +27,14 @@ export class MissingApiKeyError extends Error {
   }
 }
 
-/** A tram position filtered to a displayed tram line (TV-0005 consumes this). */
+/** A tram position shown on the map (TV-0005 consumes this). `routeShortName`
+ * is null when the vehicle's latest position resolves to no displayed GTFS
+ * tram line - depot shunting, training/testing or an absent route (TV-0011
+ * renders those vehicles out of service: red dot instead of a line number,
+ * TV-0009 category color kept). */
 export interface TramPosition {
-  routeShortName: string;
+  /** Line short name, or null when the route is not a displayed tram line. */
+  routeShortName: string | null;
   directionId: string;
   operatorId: number;
   vehicleNumber: number;
