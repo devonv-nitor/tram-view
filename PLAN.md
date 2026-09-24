@@ -13,10 +13,12 @@ providing an at-a-glance view of the state of the tram system.
 | ~~[TV-0004](Docs/ADR/0002-data-transport.md)~~ | DONE — Digitransit HFP client + local API key handling            |
 | ~~TV-0005~~                                     | DONE — Live tram markers (circles with line numbers)              |
 | [TV-0006](Tasks/TV-0006-github-pages.md)       | GitHub Pages deployment                                           |
+| [TV-0010](Tasks/TV-0010-ui-tweaks.md)          | UI tweaks: brand category colors, stable panel width              |
 | ~~[TV-0008](Docs/ADR/0002-data-transport.md)~~    | DONE — Direction indication on tram icons                         |
 | ~~[TV-0009](Docs/ADR/0002-data-transport.md)~~    | DONE — Tram type (rolling stock category) on icons                |
 | [TV-0007](Tasks/TV-0007-mvp-acceptance.md)     | MVP acceptance verification                                       |
 
 Dependency flow: ~~TV-0002~~, ~~TV-0003~~, ~~TV-0004~~, ~~TV-0005~~,
-~~TV-0008~~, ~~TV-0009~~ (all done) → TV-0006 → TV-0007. TV-0006 is the
-only remaining work before the TV-0007 acceptance check.
+~~TV-0008~~, ~~TV-0009~~ (all done) → {TV-0006, TV-0010} → TV-0007.
+TV-0006 and TV-0010 are independent; both land before the TV-0007
+acceptance check.
