@@ -6,6 +6,16 @@
     "Segoe UI",
     Roboto,
     sans-serif;
+
+  /* Rolling stock category colors (TV-0009): one hue per category, shared
+     by the marker bodies and the status-panel legend via these variables.
+     Fixed (not color-scheme aware) like the markers themselves: the OSM
+     raster tiles under the markers are always light, and each color keeps
+     >=4.5:1 contrast with the white 11px/600 label inside the body. */
+  --tram-type-a: #007ac9; /* transit blue - TV-0005's color, unchanged */
+  --tram-type-b: #15803d;
+  --tram-type-c: #b45309;
+  --tram-type-unknown: #5f6368;
 }
 
 * {
@@ -95,6 +105,13 @@ body {
   line-height: 1;
   letter-spacing: -0.2px;
   white-space: nowrap;
+  /* Native `title` tooltips (TV-0009) need pointer events on the marker
+     body: Leaflet's default CSS gives non-interactive marker icons
+     pointer-events: none, so hover never reaches them. Re-enabling it
+     here changes nothing else - the events bubble to the map container,
+     so panning and zooming stay with the map, and the markers remain
+     display-only in Leaflet's event system (no interactive targets). */
+  pointer-events: auto;
 }
 
 /* Rotor (TV-0008): rotated inline by TramMarkers.ts to the vehicle's
@@ -123,9 +140,30 @@ body {
   margin: -14px 0 0 -14px;
   border: 2px solid #fff;
   border-radius: 50% 50% 50% 0;
+  /* Category A (MLNRV I/II) color; categories B, C and unknown override
+     the background below. Only the background changes per category - the
+     TV-0008 teardrop geometry is identical for all. */
   background: #007ac9;
   transform: rotate(135deg);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+}
+
+/* Category colors (TV-0009): the modifier class is set by TramMarkers.ts
+   from the vehicle's rolling stock category (src/lib/fleet.ts). */
+.tram-marker--a .tram-marker__shape {
+  background: var(--tram-type-a);
+}
+
+.tram-marker--b .tram-marker__shape {
+  background: var(--tram-type-b);
+}
+
+.tram-marker--c .tram-marker__shape {
+  background: var(--tram-type-c);
+}
+
+.tram-marker--unknown .tram-marker__shape {
+  background: var(--tram-type-unknown);
 }
 
 /* A position without heading information (rare in live data) renders
@@ -139,4 +177,50 @@ body {
   /* Both children of .tram-marker are positioned; DOM order puts the label
      above the rotor's shape in paint order. */
   position: relative;
+}
+
+/* Color legend for the tram types (TV-0009), shown in the status panel
+   while live. Swatches use the exact marker colors via the shared
+   variables; the hairline border keeps the mid-dark hues visible on the
+   panel's Canvas in dark mode. */
+.legend {
+  margin: 0.5rem 0 0;
+  padding: 0.5rem 0 0;
+  border-top: 1px solid color-mix(in srgb, CanvasText 15%, transparent);
+  list-style: none;
+  font-size: 0.85rem;
+}
+
+.legend__item {
+  display: flex;
+  align-items: center;
+}
+
+.legend__item + .legend__item {
+  margin-top: 0.25rem;
+}
+
+.legend__swatch {
+  flex: none;
+  width: 12px;
+  height: 12px;
+  margin-right: 0.4rem;
+  border-radius: 3px;
+  border: 1px solid color-mix(in srgb, CanvasText 25%, transparent);
+}
+
+.legend__swatch--a {
+  background: var(--tram-type-a);
+}
+
+.legend__swatch--b {
+  background: var(--tram-type-b);
+}
+
+.legend__swatch--c {
+  background: var(--tram-type-c);
+}
+
+.legend__swatch--unknown {
+  background: var(--tram-type-unknown);
 }

@@ -71,6 +71,18 @@ Use **Leaflet 1.x** with **OpenStreetMap standard raster tiles**
   already holds (ADR-0002), so no extra request, marker, or map-layer change
   was needed; the rotation is one inline `transform` write per update, well
   within the marker comfort zone above.
+- TV-0009 (rolling stock category on the markers) is a pure rendering choice
+  over this decision: each marker body is colored by the vehicle's category
+  via per-category CSS variables shared with the status-panel legend
+  (`src/index.css`); the variables are fixed (not color-scheme aware) like
+  the markers above, because the OSM raster tiles stay light. The category
+  comes from the vehicle number the client already parses
+  (`src/lib/fleet.ts`; source decision in ADR-0002), and each marker also
+  carries a native `title` tooltip with the full model name, so the meaning
+  of a color is one hover away. Color-only category separation is an
+  accepted accessibility limitation for now (user, 2026 session); a fuller
+  accessible encoding (pattern/shape per category) belongs to a follow-up
+  task.
 - Revisit this decision if marker updates grow beyond Leaflet's comfort zone
   (roughly thousands of simultaneously animated markers) or if vector basemap
   styling becomes a product requirement — the switch point is MapLibre GL JS.
