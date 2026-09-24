@@ -1,12 +1,34 @@
+import type { TramPosition } from "../lib/digitransit.ts";
 import type { TramPositionsState } from "../hooks/useTramPositions";
-import { TRAM_CATEGORY_LEGEND } from "../lib/fleet.ts";
+import {
+  TRAM_CATEGORY_LEGEND,
+  tramCategoryInfo,
+  type TramCategory,
+} from "../lib/fleet.ts";
+
+/** Live per-type counts for the legend (TV-0012), derived from the current
+ * positions snapshot on every render - no state of their own: the panel
+ * re-renders exactly when the snapshot changes (see useTramPositions), so
+ * the counts are always in sync with the map markers. Unknown vehicle
+ * numbers (including malformed ones) tally into UNKNOWN via the fleet
+ * resolver. */
+function countByCategory(
+  positions: TramPosition[],
+): Record<TramCategory, number> {
+  const counts: Record<TramCategory, number> = { A: 0, B: 0, C: 0, UNKNOWN: 0 };
+  for (const position of positions) {
+    counts[tramCategoryInfo(position.vehicleNumber).category] += 1;
+  }
+  return counts;
+}
 
 /** Compact status indicator for the live tram data client (TV-0004): one
  * status line while live, an error box when the client fails - most
  * importantly the missing or rejected digitransit API key - and progress
  * text while the metadata query or the MQTT subscription is still coming
  * up. While live it also shows the color legend for the tram rolling
- * stock categories shown on the map markers (TV-0009) and the red
+ * stock categories shown on the map markers (TV-0009), each with its
+ * live count of trams currently in the snapshot (TV-0012), and the red
  * not-in-service dot entry for out-of-service trams (TV-0011). Tram
  * positions themselves render as map markers (TV-0005). */
 export function TramStatusPanel({ trams }: { trams: TramPositionsState }) {
@@ -35,6 +57,10 @@ export function TramStatusPanel({ trams }: { trams: TramPositionsState }) {
     );
   }
 
+  // One live count per category for this render (TV-0012); computed once,
+  // not per legend entry.
+  const counts = countByCategory(trams.positions);
+
   return (
     <section
       aria-live="polite"
@@ -55,7 +81,10 @@ export function TramStatusPanel({ trams }: { trams: TramPositionsState }) {
               className={`legend__swatch legend__swatch--${category.category.toLowerCase()}`}
               aria-hidden="true"
             />
-            {category.label}
+            {/* TV-0012: live count of trams of this type in the current
+                snapshot, prepended to the label from fleet.ts - the label
+                itself carries no count and no category letter. */}
+            ({counts[category.category]}) {category.label}
           </li>
         ))}
         {/* TV-0011: out-of-service trams keep their category color and

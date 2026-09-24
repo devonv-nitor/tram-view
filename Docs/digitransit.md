@@ -62,8 +62,10 @@ of the data client:
   comes up;
 - once live, a status line with the number of trams currently tracked and
   the time of the last update, plus a color legend for the tram rolling
-  stock categories (`src/lib/fleet.ts`) shown on the map markers and a
-  red-dot entry for out-of-service trams (TV-0011).
+  stock categories (`src/lib/fleet.ts`) shown on the map markers, each
+  category entry carrying its live count of trams currently in the
+  snapshot (TV-0012), and a red-dot entry for out-of-service trams
+  (TV-0011).
 
 Positions and line metadata are produced by `src/lib/hfp.ts` and
 `src/lib/digitransit.ts`, and surfaced to UI code as `TramPosition` objects
