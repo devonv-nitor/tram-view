@@ -84,3 +84,39 @@ export function tramCategoryInfo(vehicleNumber: number): TramCategoryInfo {
   }
   return CATEGORY_INFO.UNKNOWN;
 }
+
+/** TV-0013: HSL car #175 is the SpåraKoff bar tram. It runs only at certain
+ * times and its line designation is unknown to the user, so it is detected by
+ * identity on the latest position - operator 40 (HSL) plus vehicle number 175
+ * - never by `desi`, route id, or line metadata: the car number is the
+ * reliable signal (user decision recorded in the TV-0013 commit evidence).
+ * The special case wins over the CATEGORY_RANGES lookup above (car 175 would
+ * otherwise classify as category A) while leaving every other number on the
+ * plain range lookup. */
+export const SPARAKOFF_OPERATOR_ID = 40;
+export const SPARAKOFF_VEHICLE_NUMBER = 175;
+
+/** The letter the bar tram's marker shows in place of the line number
+ * (TV-0013). */
+export const SPARAKOFF_MARKER_LETTER = "K";
+
+/** Legend label for the bar tram's status-panel entry (TV-0013): the user's
+ * spelling, which wins over the operator's own "Spårakoff". */
+export const SPARAKOFF_LEGEND_LABEL = "SpåraKoff";
+
+/** Minimal vehicle identity the SpåraKoff detection keys on; any position
+ * shape (HFP messages and filtered TramPosition alike) satisfies it. */
+export interface TramVehicleIdentity {
+  operatorId: number;
+  vehicleNumber: number;
+}
+
+/** True when the vehicle is the SpåraKoff bar tram (TV-0013). Consulted
+ * before tramCategoryInfo by every consumer that renders vehicle identity:
+ * the marker layer and the status-panel counts. */
+export function isSparakoffBarTram(vehicle: TramVehicleIdentity): boolean {
+  return (
+    vehicle.operatorId === SPARAKOFF_OPERATOR_ID &&
+    vehicle.vehicleNumber === SPARAKOFF_VEHICLE_NUMBER
+  );
+}

@@ -1,6 +1,6 @@
 /**
  * Imperative Leaflet marker layer for live tram markers (TV-0005, TV-0008,
- * TV-0009, TV-0011).
+ * TV-0009, TV-0011, TV-0013).
  * One directional marker per vehicle: a teardrop body with the line short
  * name inside, colored by the vehicle's rolling stock category, rotated so
  * its point faces the vehicle's reported heading, and carrying a native
@@ -27,7 +27,12 @@
  */
 import L from "leaflet";
 import type { TramPosition } from "../lib/digitransit.ts";
-import { tramCategoryInfo, type TramCategoryInfo } from "../lib/fleet.ts";
+import {
+  isSparakoffBarTram,
+  SPARAKOFF_MARKER_LETTER,
+  tramCategoryInfo,
+  type TramCategoryInfo,
+} from "../lib/fleet.ts";
 import { vehicleKey } from "../lib/hfp.ts";
 
 /** Marker body diameter in px; the line label sits centered inside the
@@ -47,6 +52,24 @@ const TRAM_MARKER_CENTER: [number, number] = [
 function normalizeHeading(heading: number | null): number | null {
   if (heading === null) return null;
   return ((heading % 360) + 360) % 360;
+}
+
+/** Body-color class slug for one vehicle: the SpåraKoff special case
+ * (TV-0013) wins over the TV-0009 category for car #175 only; every other
+ * number keeps its plain CATEGORY_RANGES lookup. */
+function markerSlug(position: TramPosition, info: TramCategoryInfo): string {
+  return isSparakoffBarTram(position)
+    ? "sparakoff"
+    : info.category.toLowerCase();
+}
+
+/** Line-number text for one vehicle's label: the SpåraKoff letter (TV-0013)
+ * in place of the line number, unconditionally - also when the route resolves
+ * to no line, where every other vehicle shows the TV-0011 red dot. */
+function markerLabel(position: TramPosition): string {
+  return isSparakoffBarTram(position)
+    ? SPARAKOFF_MARKER_LETTER
+    : (position.routeShortName ?? "");
 }
 
 /** Builds the icon for one vehicle position: the directional teardrop
@@ -75,14 +98,17 @@ function createTramIcon(
   info: TramCategoryInfo,
 ): L.DivIcon {
   const headingless = position.heading === null;
-  const offline = position.routeShortName === null;
-  const className = `tram-marker tram-marker--${info.category.toLowerCase()}${headingless ? " tram-marker--headingless" : ""}${offline ? " tram-marker--offline" : ""}`;
+  // TV-0013: the SpåraKoff bar tram always shows its own letter and color -
+  // never the TV-0011 red dot, even when its route resolves to no line.
+  const barTram = isSparakoffBarTram(position);
+  const offline = position.routeShortName === null && !barTram;
+  const className = `tram-marker tram-marker--${markerSlug(position, info)}${headingless ? " tram-marker--headingless" : ""}${offline ? " tram-marker--offline" : ""}`;
   const rotation = headingless
     ? ""
     : ` style="transform: rotate(${normalizeHeading(position.heading)}deg)"`;
   return L.divIcon({
     className,
-    html: `<div class="tram-marker__rotor"${rotation}><div class="tram-marker__shape"></div></div><span class="tram-marker__label">${position.routeShortName ?? ""}</span><span class="tram-marker__dot"></span>`,
+    html: `<div class="tram-marker__rotor"${rotation}><div class="tram-marker__shape"></div></div><span class="tram-marker__label">${markerLabel(position)}</span><span class="tram-marker__dot"></span>`,
     iconSize: [TRAM_MARKER_PX, TRAM_MARKER_PX],
     iconAnchor: TRAM_MARKER_CENTER,
   });
@@ -91,8 +117,18 @@ function createTramIcon(
 /** Tooltip text for one vehicle: the full model name (TV-0009). Unknown
  * types say so explicitly and name the vehicle number instead of a model.
  * Out-of-service vehicles (TV-0011) replace the "Line N" prefix with a
- * "not in service" hint and keep the model name. */
+ * "not in service" hint and keep the model name. The SpåraKoff bar tram
+ * (TV-0013) is identified by name with the same line prefix and no category
+ * letter - the ranges' category A it does not belong to is an internal
+ * detail. */
 function tooltipText(position: TramPosition, info: TramCategoryInfo): string {
+  if (isSparakoffBarTram(position)) {
+    const line =
+      position.routeShortName === null
+        ? "Not in service"
+        : `Line ${position.routeShortName}`;
+    return `${line} — SpåraKoff (bar tram)`;
+  }
   const line =
     position.routeShortName === null
       ? "Not in service"
@@ -168,29 +204,32 @@ export class TramMarkerLayer {
     // TV-0011: the out-of-service flip in either direction (service line <->
     // no line, e.g. a vehicle reporting under both its route and 1009TX) is
     // one class toggle: the label span and the red dot swap visibility in
-    // CSS, so no element is created or removed on a flicker.
-    const offline = position.routeShortName === null;
+    // CSS, so no element is created or removed on a flicker. TV-0013: the
+    // SpåraKoff bar tram never flips - it shows its letter, not the dot,
+    // even when the route resolves to no line.
+    const offline =
+      position.routeShortName === null && !isSparakoffBarTram(position);
     if (element.classList.contains("tram-marker--offline") !== offline) {
       element.classList.toggle("tram-marker--offline", offline);
     }
-    const labelText = position.routeShortName ?? "";
+    const labelText = markerLabel(position);
     const label = element.querySelector<HTMLElement>(".tram-marker__label");
     if (label !== null && label.textContent !== labelText) {
       label.textContent = labelText;
     }
   }
 
-  /** Keeps the category color class (TV-0009) and the `title` tooltip in
-   * sync with the vehicle's current state. The category derives from the
-   * vehicle number, which is part of the marker key and so never changes
-   * for an existing marker - the class effectively settles at creation -
-   * but both writes compare first and stay correct if the key or the
-   * line label ever changes. */
+  /** Keeps the marker's body-color class (TV-0009, TV-0013) and the `title`
+   * tooltip in sync with the vehicle's current state. The category and the
+   * SpåraKoff identity both derive from the vehicle's oper+veh identity,
+   * which is part of the marker key and so never changes for an existing
+   * marker - the class effectively settles at creation - but both writes
+   * compare first and stay correct if the key or the mapping ever changes. */
   private syncCategory(element: HTMLElement, position: TramPosition): void {
     const info = tramCategoryInfo(position.vehicleNumber);
-    const slug = info.category.toLowerCase();
+    const slug = markerSlug(position, info);
     if (!element.classList.contains(`tram-marker--${slug}`)) {
-      for (const category of ["a", "b", "c", "unknown"] as const) {
+      for (const category of ["a", "b", "c", "unknown", "sparakoff"] as const) {
         element.classList.toggle(`tram-marker--${category}`, category === slug);
       }
     }

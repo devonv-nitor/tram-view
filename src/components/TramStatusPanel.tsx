@@ -1,6 +1,8 @@
 import type { TramPosition } from "../lib/digitransit.ts";
 import type { TramPositionsState } from "../hooks/useTramPositions";
 import {
+  isSparakoffBarTram,
+  SPARAKOFF_LEGEND_LABEL,
   TRAM_CATEGORY_LEGEND,
   tramCategoryInfo,
   type TramCategory,
@@ -11,12 +13,15 @@ import {
  * re-renders exactly when the snapshot changes (see useTramPositions), so
  * the counts are always in sync with the map markers. Unknown vehicle
  * numbers (including malformed ones) tally into UNKNOWN via the fleet
- * resolver. */
+ * resolver. TV-0013: the SpåraKoff bar tram is excluded - it has its own
+ * legend entry below and must not double-count into the A/MLNRV total it
+ * would otherwise land in via the number ranges. */
 function countByCategory(
   positions: TramPosition[],
 ): Record<TramCategory, number> {
   const counts: Record<TramCategory, number> = { A: 0, B: 0, C: 0, UNKNOWN: 0 };
   for (const position of positions) {
+    if (isSparakoffBarTram(position)) continue;
     counts[tramCategoryInfo(position.vehicleNumber).category] += 1;
   }
   return counts;
@@ -28,7 +33,9 @@ function countByCategory(
  * text while the metadata query or the MQTT subscription is still coming
  * up. While live it also shows the color legend for the tram rolling
  * stock categories shown on the map markers (TV-0009), each with its
- * live count of trams currently in the snapshot (TV-0012), and the red
+ * live count of trams currently in the snapshot (TV-0012), the SpåraKoff
+ * bar tram entry while car #175 reports (TV-0013 - hidden entirely when it
+ * is absent, never a zero-count row), and the red
  * not-in-service dot entry for out-of-service trams (TV-0011). Tram
  * positions themselves render as map markers (TV-0005). */
 export function TramStatusPanel({ trams }: { trams: TramPositionsState }) {
@@ -58,8 +65,14 @@ export function TramStatusPanel({ trams }: { trams: TramPositionsState }) {
   }
 
   // One live count per category for this render (TV-0012); computed once,
-  // not per legend entry.
+  // not per legend entry. TV-0013: the SpåraKoff bar tram is counted
+  // separately - the snapshot dedups per vehicle, so this is 0 or 1, and
+  // the legend entry below is rendered only while the car is present.
   const counts = countByCategory(trams.positions);
+  const sparakoffCount = trams.positions.reduce(
+    (n, position) => (isSparakoffBarTram(position) ? n + 1 : n),
+    0,
+  );
 
   return (
     <section
@@ -87,6 +100,19 @@ export function TramStatusPanel({ trams }: { trams: TramPositionsState }) {
             ({counts[category.category]}) {category.label}
           </li>
         ))}
+        {/* TV-0013: the SpåraKoff bar tram has its own entry while car #175
+            is in the current snapshot, in the TV-0012 format; it disappears
+            entirely with the car - never a zero-count row. It sits with the
+            type entries, before the out-of-service state entry. */}
+        {sparakoffCount > 0 && (
+          <li className="legend__item">
+            <span
+              className="legend__swatch legend__swatch--sparakoff"
+              aria-hidden="true"
+            />
+            ({sparakoffCount}) {SPARAKOFF_LEGEND_LABEL}
+          </li>
+        )}
         {/* TV-0011: out-of-service trams keep their category color and
             replace the line number with a red dot - not a vehicle type, so
             it sits after the category entries. */}

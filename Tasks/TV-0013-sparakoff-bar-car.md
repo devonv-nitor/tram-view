@@ -1,6 +1,6 @@
 ---
 id: TV-0013
-status: READY
+status: IN_PROGRESS
 owner: agent
 gatekeeper: human
 required_approvals: []
