@@ -24,11 +24,12 @@ the Töölö depot stops) shows such trams exist in the feed and carry the
 same position/heading data as service trams. They should be visible.
 
 - Render a tram whose latest position resolves to no displayed line as
-  an **empty marker** (no line number inside) in a **distinct color**
-  (red family, per the user) to signal "not in service but reporting".
-  The marker keeps the TV-0008 teardrop shape, heading rotation, and
-  the TV-0009 tooltip (model name; tooltip may add a hint like
-  "not in service").
+  the **normal category-colored marker** (TV-0009 hue kept, so the
+  fleet category stays readable) with the **line number replaced by a
+  red dot** inside the body, signalling "not in service but reporting"
+  (user decision, 2026 session). The marker keeps the TV-0008 teardrop
+  shape, heading rotation, and the TV-0009 tooltip (model name; tooltip
+  may add a hint like "not in service").
 - How it works:
   1. In the snapshot (`src/hooks/useTramPositions.ts`), keep positions
      whose route id resolves to nothing instead of dropping them —
@@ -36,10 +37,10 @@ same position/heading data as service trams. They should be visible.
      (e.g. `routeShortName: null`), and the line-number label renders
      only when a short name exists.
   2. Vehicle-number category mapping (`src/lib/fleet.ts`) still
-     applies; an out-of-service tram keeps its fleet color *replaced*
-     by the out-of-service color (the out-of-service state wins, per
-     the user's intent).
-  3. Legend gains an out-of-service entry.
+     applies and stays visible: the body keeps the category color; the
+     out-of-service state is shown by the red dot in place of the line
+     number (per the user's refinement, 2026 session).
+  3. Legend gains an out-of-service entry (red dot symbol).
   4. Known flicker from the coordinator census: a vehicle can report
      under both its service route and `1009TX` within the same second
      (e.g. car 414 on line 8 and depot simultaneously). Whatever
@@ -59,11 +60,11 @@ same position/heading data as service trams. They should be visible.
 
 ## Acceptance
 
-- Live verification shows at least one out-of-service (red, empty)
-  marker when such trams are reporting (e.g. depot vehicles), with
-  heading rotation working; if none are reporting during the window,
-  verify by code-review of the mapping plus a synthetic injection,
-  and say so.
+- Live verification shows at least one out-of-service marker (category
+  body, red dot instead of a line number) when such trams are reporting
+  (e.g. depot vehicles), with heading rotation working; if none are
+  reporting during the window, verify by code-review of the mapping
+  plus a synthetic injection, and say so.
 - Service trams are unchanged: same lines, same colors, same
   disappearance-on-departure behavior.
 - Legend documents the out-of-service color.
@@ -76,7 +77,7 @@ same position/heading data as service trams. They should be visible.
   (marker shape); it must land after both, before TV-0007.
 - The user accepted that "not officially on a line" includes depot
   shunting and testing; if the feed ever carries genuinely private or
-  maintenance vehicles, the same red treatment applies, which is
+  maintenance vehicles, the same red-dot treatment applies, which is
   accepted.
 - Known data quirk to re-check live during verification: a vehicle can
   appear on both a service line and an out-of-service route in the same
