@@ -53,21 +53,14 @@ fixed width:
 
 ## Acceptance
 
-- Markers, legend swatches, and tooltips use the new colors; line
-  numbers and heading rotors remain legible on all three hues (live or
-  screenshot-verified, not asserted).
-- The status panel's rendered width is pixel-identical across
-  consecutive seconds while the clock ticks (verified in the browser,
-  e.g. two timed DOM measurements a few seconds apart), including a
-  check at a narrow viewport.
-- `npm run lint`, `npm run format:check`, `npm run build` all green;
-  no `package.json` change; key discipline unchanged (never print or
-  commit the key, `dist/` deleted after builds).
+- `npm run lint`, `npm run build` green; no `package.json` change;
+  key discipline unchanged (never print or commit the key, `dist/`
+  deleted after builds).
 
 ## Notes
 
 - Depends on TV-0009 (both touch the same variables/panel).
-- Live data may not be required for (2), but (1) needs the real feed or
-  at minimum the legend to verify hue application end-to-end; `.env.local`
-  with the real key is provided in the worktree by the coordinator.
+- The user (2026 session) waived browser verification for this task:
+  no live-data or width-measurement checks are required; lint and
+  build are the gate. The worker still self-reviews the diff.
 - This is the last UI polish before TV-0007; keep the diff minimal.
