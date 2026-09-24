@@ -1,6 +1,6 @@
 ---
 id: TV-0009
-status: IN_PROGRESS
+status: REVIEW
 owner: agent
 gatekeeper: human
 required_approvals: []
@@ -76,3 +76,20 @@ names.
   limitations` and in the task handoff.
 - The end-to-end MVP check remains TV-0007; this task should land
   before that check runs.
+
+## Handoff (worker, 2026-09-24)
+
+Implemented on branch `bb/worker-tv-0009-tram-type-thr_t8v5wp2ur5`.
+Category source resolved per the task's API-first priority with live
+evidence (full detail in the TV-0009 commit record): the HFP VP payload
+(47,852 messages / 100 s, 22 distinct VP fields) carries no
+make/model/subtype field, and the keyed Routing API GraphQL has no
+tram-vehicle query (introspection: only rental-vehicle/parking; routes
+metadata is per-line) - so the car-number fallback wins
+(`src/lib/fleet.ts`: 0-399 A, 400-499 B, 600-699 C, unknown otherwise),
+a rendering-only choice with no extra request. Browser-verified live
+(headless Chrome over CDP): 110 markers (A 14, B 59, C 37), tooltips
+carry full model names, painted pixels are three distinct hues, legend
+correct. All three categories were in service during the window; no 5xx
+vehicle was, so unknown behavior is code-verified only. No package.json
+change. Full evidence and limitations in the TV-0009 commit.
