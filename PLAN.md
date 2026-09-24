@@ -1,6 +1,6 @@
 # Tram view plan
 
-Status: `TV-0003..TV-0005 COMPLETE - live map with moving tram markers on main`
+Status: `TV-0003..TV-0005 + TV-0008 COMPLETE - directional live tram markers on main`
 
 The application is a live view of all of the trams currently active in the HSL network,
 providing an at-a-glance view of the state of the tram system.
@@ -13,11 +13,10 @@ providing an at-a-glance view of the state of the tram system.
 | ~~[TV-0004](Docs/ADR/0002-data-transport.md)~~ | DONE — Digitransit HFP client + local API key handling            |
 | ~~TV-0005~~                                     | DONE — Live tram markers (circles with line numbers)              |
 | [TV-0006](Tasks/TV-0006-github-pages.md)       | GitHub Pages deployment                                           |
-| [TV-0008](Tasks/TV-0008-tram-direction.md)     | Direction indication on tram icons                                |
+| ~~[TV-0008](Docs/ADR/0002-data-transport.md)~~    | DONE — Direction indication on tram icons                         |
 | [TV-0009](Tasks/TV-0009-tram-type.md)          | Tram type (rolling stock category) on icons                       |
 | [TV-0007](Tasks/TV-0007-mvp-acceptance.md)     | MVP acceptance verification                                       |
 
-Dependency flow: ~~TV-0002~~, ~~TV-0003~~, ~~TV-0004~~, ~~TV-0005~~ (all
-done) → {TV-0006, TV-0008 → TV-0009} → TV-0007. TV-0008 and TV-0009
-both modify the tram icon, so they serialize; both land before the
-TV-0007 acceptance check.
+Dependency flow: ~~TV-0002~~, ~~TV-0003~~, ~~TV-0004~~, ~~TV-0005~~,
+~~TV-0008~~ (all done) → {TV-0006, TV-0009} → TV-0007. TV-0009 builds on
+TV-0008's icon and lands before the TV-0007 acceptance check.
