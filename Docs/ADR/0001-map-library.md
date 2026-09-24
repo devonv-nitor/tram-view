@@ -58,11 +58,13 @@ Use **Leaflet 1.x** with **OpenStreetMap standard raster tiles**
   for this MVP.
 - Map center/zoom for the Helsinki tram network live in
   `src/map/constants.ts`; TV-0005 reads them from there.
-- Tram markers (TV-0005, TV-0008) are fixed-color `divIcon` teardrops -
-  transit blue (#007ac9) with white text and a white ring - because the OSM
-  raster basemap is always light regardless of the UI `color-scheme`; the
-  markers deliberately do not follow dark mode, while panel and other UI
-  chrome do.
+- Tram markers (TV-0005, TV-0008) are fixed-color `divIcon` teardrops with a
+  white ring - one user-specified brand hue per rolling-stock category (the
+  `--tram-type-*` variables in `src/index.css`; TV-0009, TV-0010), with dark
+  label ink on the light brand bodies and white on unknown for >=4.5:1 label
+  contrast - because the OSM raster basemap is always light regardless of the
+  UI `color-scheme`; the markers deliberately do not follow dark mode, while
+  panel and other UI chrome do.
 - TV-0008 (direction indication) is a pure rendering choice over this
   decision: each marker body stays a fixed-size `divIcon` centered on the
   vehicle position, with a teardrop shape whose point is rotated toward the

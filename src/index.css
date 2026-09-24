@@ -7,14 +7,17 @@
     Roboto,
     sans-serif;
 
-  /* Rolling stock category colors (TV-0009): one hue per category, shared
-     by the marker bodies and the status-panel legend via these variables.
-     Fixed (not color-scheme aware) like the markers themselves: the OSM
-     raster tiles under the markers are always light, and each color keeps
-     >=4.5:1 contrast with the white 11px/600 label inside the body. */
-  --tram-type-a: #007ac9; /* transit blue - TV-0005's color, unchanged */
-  --tram-type-b: #15803d;
-  --tram-type-c: #b45309;
+  /* Rolling stock category colors (TV-0009, TV-0010): one user-specified
+     brand hue per category, shared by the marker bodies and the
+     status-panel legend via these variables. Fixed (not color-scheme
+     aware) like the markers themselves: the OSM raster tiles under the
+     markers are always light. The brand hues are lighter than TV-0009's
+     palette, so the white 11px/600 label no longer meets 4.5:1 on them;
+     marker label ink switches per body below (dark on the brand A/B/C
+     bodies, white on unknown). */
+  --tram-type-a: #fcb919;
+  --tram-type-b: #00a664;
+  --tram-type-c: #00bbe7;
   --tram-type-unknown: #5f6368;
 }
 
@@ -56,7 +59,14 @@ body {
   padding: 1rem 1.25rem;
   border: 1px solid #d0d0d8;
   border-radius: 8px;
-  /* Keep clear of the top-left zoom control on narrow viewports. */
+  /* TV-0010: fixed width - the live line's clock re-renders every second
+     and shrink-to-fit made the panel breathe a few px per second. 24rem
+     fits the widest expected content (the live line at triple-digit tram
+     counts plus the locale time, and the longest legend label) with
+     margin; the error variant's long message just wraps inside it. */
+  width: 24rem;
+  /* Keep clear of the top-left zoom control on narrow viewports (TV-0002
+     merge review); this responsive ceiling still clamps the fixed width. */
   max-width: min(24rem, calc(100% - 8rem));
   /* Stay above the OSM attribution band at the bottom edge. */
   max-height: calc(100% - 4rem);
@@ -89,10 +99,11 @@ body {
 
 /* Tram markers (TV-0005, TV-0008) sit on the OpenStreetMap raster tiles, which
    are always light regardless of the UI color-scheme. Their colors are
-   therefore fixed rather than color-scheme aware: transit blue with white
-   text and a white ring stays readable over the light tiles in both UI
-   color schemes (contrast > 4.5:1 against the white ring and tiles).
-   Recorded in Docs/ADR/0001-map-library.md. */
+   therefore fixed rather than color-scheme aware: a user-specified brand hue
+   per category (the --tram-type-* variables) with a white ring, and label ink
+   per body (dark on the light brand bodies, white on unknown), stays readable
+   over the light tiles in both UI color schemes. Recorded in
+   Docs/ADR/0001-map-library.md. */
 .tram-marker {
   display: flex;
   align-items: center;
@@ -143,7 +154,7 @@ body {
   /* Category A (MLNRV I/II) color; categories B, C and unknown override
      the background below. Only the background changes per category - the
      TV-0008 teardrop geometry is identical for all. */
-  background: #007ac9;
+  background: var(--tram-type-a);
   transform: rotate(135deg);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
 }
@@ -179,10 +190,20 @@ body {
   position: relative;
 }
 
+/* TV-0010 brand hues: A/B/C bodies are light, so the white ink inherited
+   from .tram-marker would fall far below the >=4.5:1 the :root comment
+   documents (worst 1.7:1 on the amber); #1a1a1a restores >=5.5:1 on all
+   three. The unknown body keeps the white ink (6:1 on its mid gray). */
+.tram-marker--a .tram-marker__label,
+.tram-marker--b .tram-marker__label,
+.tram-marker--c .tram-marker__label {
+  color: #1a1a1a;
+}
+
 /* Color legend for the tram types (TV-0009), shown in the status panel
    while live. Swatches use the exact marker colors via the shared
-   variables; the hairline border keeps the mid-dark hues visible on the
-   panel's Canvas in dark mode. */
+   variables; the hairline border keeps every hue visible on the panel's
+   Canvas in dark mode. */
 .legend {
   margin: 0.5rem 0 0;
   padding: 0.5rem 0 0;
