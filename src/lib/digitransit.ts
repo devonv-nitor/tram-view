@@ -301,3 +301,110 @@ export function resolveTramRouteDebug(
     passesLineCriteria: isTramLineShortName(rawRoute.shortName),
   };
 }
+
+/**
+ * TV-0017: the trip-pattern query behind the vehicle overview's journey
+ * spine (ADR-0002 amendment). One query per (route, direction) per session:
+ * the pattern gives the ordered stop names with their coordinates, which is
+ * what turns the HFP stop ids into a readable sequence.
+ */
+const TRIP_PATTERN_QUERY = (routeGtfsId: string) => `
+  query TripPattern {
+    route(id: ${JSON.stringify(routeGtfsId)}) {
+      patterns {
+        directionId
+        headsign
+        stops {
+          gtfsId
+          name
+          lat
+          lon
+        }
+      }
+    }
+  }
+`;
+
+/** One stop of a trip pattern, with the coordinates the spine needs. */
+export interface TripPatternStop {
+  /** GTFS stop id, e.g. "HSL:1230407". */
+  gtfsId: string;
+  name: string;
+  lat: number;
+  lon: number;
+}
+
+/** One direction of a route: the ordered stop sequence the vehicle runs. */
+export interface TripPattern {
+  /** GTFS direction id: 0-based, while the HFP topic's `dir` is 1-based
+   * (ADR-0002 amendment, verified on 12 live routes). */
+  directionId: number;
+  headsign: string | null;
+  stops: TripPatternStop[];
+}
+
+interface TripPatternData {
+  route: {
+    patterns: {
+      directionId: number;
+      headsign: string | null;
+      stops: { gtfsId: string; name: string; lat: number; lon: number }[];
+    }[];
+  } | null;
+}
+
+const tripPatternCache = new Map<string, Promise<TripPattern | null>>();
+
+/** Loads the trip pattern for one HFP route id + topic direction, cached per
+ * session per (route, direction). The pattern is selected by
+ * `directionId === Number(dir) - 1` - never by the headsign string, which the
+ * HFP topic abbreviates ("Olympiaterm." vs GTFS "Olympiaterminaali").
+ * Resolves to null when the route has no pattern in that direction; rejects
+ * on transport/key errors and clears its cache entry so a later call retries
+ * (a failure must be retryable, a success must not be re-fetched). */
+export function loadTripPattern(
+  routeId: string,
+  direction: string,
+  apiKey?: string,
+): Promise<TripPattern | null> {
+  const directionId = Number(direction) - 1;
+  if (!Number.isInteger(directionId) || directionId < 0) {
+    return Promise.reject(
+      new Error(`HFP direction "${direction}" is not a 1-based integer`),
+    );
+  }
+  const key = `${routeId}/${direction}`;
+  const cached = tripPatternCache.get(key);
+  if (cached !== undefined) return cached;
+  const promise = fetchTripPattern(routeId, directionId, apiKey);
+  tripPatternCache.set(key, promise);
+  promise.catch(() => {
+    if (tripPatternCache.get(key) === promise) tripPatternCache.delete(key);
+  });
+  return promise;
+}
+
+async function fetchTripPattern(
+  routeId: string,
+  directionId: number,
+  apiKey: string | undefined,
+): Promise<TripPattern | null> {
+  const data = await graphQlRequest<TripPatternData>(
+    TRIP_PATTERN_QUERY(`HSL:${routeId}`),
+    apiKey ?? getDigitransitApiKey(),
+  );
+  const pattern = data.route?.patterns.find(
+    (candidate) => candidate.directionId === directionId,
+  );
+  if (pattern === undefined) return null;
+  return {
+    directionId: pattern.directionId,
+    headsign: pattern.headsign,
+    stops: pattern.stops.map((stop) => ({
+      gtfsId: stop.gtfsId,
+      name: stop.name,
+      lat: stop.lat,
+      lon: stop.lon,
+    })),
+  };
+}

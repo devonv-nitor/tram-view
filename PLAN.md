@@ -1,14 +1,29 @@
 # Tram view plan
 
-Status: `All tasks complete — TV-0002..TV-0016 merged and verified (MVP accepted; ADR-0003 key policy live). No outstanding work.`
+Status: `TV-0017 (vehicle overview page) is implemented and in REVIEW — awaiting its reviewer and the merge-delta check. TV-0002..TV-0016 are merged and verified (MVP accepted; ADR-0003 key policy live).`
 
 The application is a live view of all of the trams currently active in the HSL network,
 providing an at-a-glance view of the state of the tram system.
 
+## Open work
+
+| Task | Deliverable |
+| ---- | ----------- |
+| [TV-0017](Tasks/TV-0017-vehicle-overview.md) — `REVIEW` | Per-tram overview page over a vehicle-scoped HFP subscription |
+
+[ADR-0004](Docs/ADR/0004-vehicle-overview-page.md) (vehicle overview page and
+its `#/vehicle/<oper>/<veh>` URL contract) and the
+[ADR-0002 amendment](Docs/ADR/0002-data-transport.md) (vehicle-scoped
+subscription, retained per-vehicle state, pattern query, verified field
+facts) are accepted and implemented by TV-0017; the only remaining step for
+them is that task's review and merge.
+
 ## Completed work
 
-All tasks are merged, delta-reviewed, and retired; `Tasks/` holds only the
-[_template.md](Tasks/_template.md) used for future task definitions.
+All work through TV-0016 is merged, delta-reviewed and retired; the retired
+tasks are listed below. New work is defined from
+[_template.md](Tasks/_template.md) and listed under
+[Open work](#open-work).
 
 | Task                                           | Deliverable                                                       |
 | ---------------------------------------------- | ----------------------------------------------------------------- |
@@ -28,7 +43,8 @@ All tasks are merged, delta-reviewed, and retired; `Tasks/` holds only the
 | ~~TV-0016~~                                    | DONE — Marker click popup: red-dot decision debug readout         |
 
 Dependency flow: TV-0002…TV-0014 — **all merged and verified; the MVP is
-shipped and the post-MVP polish wave (TV-0012..TV-0014) is complete.** The
+shipped and the post-MVP polish wave (TV-0012..TV-0016) is complete.** The
 deployed site is live at <https://devonv-nitor.github.io/tram-view/>
-(public key policy per ADR-0003). New work:
-define tasks from [Tasks/_template.md](Tasks/_template.md).
+(public key policy per ADR-0003). New work is listed under
+[Open work](#open-work) and defined from
+[Tasks/_template.md](Tasks/_template.md).

@@ -166,3 +166,202 @@ Option C.
   this ADR before making that change.
 - If HSL ever requires authentication on the MQTT broker or publishes a
   GraphQL positions API, revisit this ADR before changing the transport.
+
+## Amendment: vehicle-scoped subscription for the vehicle overview page
+
+- Status: Accepted (2026-09-25); implemented (2026-09-25) by
+  [TV-0017](../../Tasks/TV-0017-vehicle-overview.md).
+
+- Status: **Accepted (2026-09-25, user decision); accepted but not yet
+  implemented** - implementation task
+  [TV-0017](../../Tasks/TV-0017-vehicle-overview.md).
+- Decides: the MQTT subscription scope, the retained per-vehicle event set
+  and retention window, and the additional keyed GraphQL query that the
+  vehicle overview page needs.
+- Refines, does not replace, Option C / Decision above: the map page keeps
+  its network-wide subscription `/hfp/v2/journey/ongoing/vp/tram/#` exactly as
+  decided there.
+- Affects: `src/lib/hfp.ts`, `src/lib/digitransit.ts`,
+  `src/hooks/useVehicleTelemetry.ts` (new), `Docs/digitransit.md`.
+- Page and URL contract: [ADR-0004](./0004-vehicle-overview-page.md).
+
+### Subscription scope
+
+The overview page subscribes to **one vehicle-scoped filter**:
+
+```
+/hfp/v2/journey/ongoing/+/tram/<oper>/<veh>/#
+```
+
+`<oper>` is the operator id zero-padded to 4 characters and `<veh>` the
+vehicle number zero-padded to 5 (`oper` 40, `veh` 402 -> `0040`/`00402`);
+both paddings, and the fact that the filter must end in `#` because HFP
+topics carry a variable-length geohash tail (`tlr`/`tla` add one more `sid`
+level than `vp`), were verified live on 2026-09-25 against real topics such
+as `/hfp/v2/journey/ongoing/vp/tram/0040/00414/1004/2/Katajanokka/13:28/1150432/...`.
+
+**Exactly one MQTT connection is open at a time.** The overview page owns the
+vehicle-scoped filter and the map page owns the network-wide one; navigating
+between them closes the other with no overlap. Measured load difference on
+2026-09-25: the vehicle-scoped filter delivered 60-64 messages in 15 s for
+six sampled vehicles (`vp` at ~1/s plus that vehicle's own `arr`/`ars`/
+`dep`/`pde`/`doo`/`doc`/`tlr`/`tla`), against ~430 tram `vp` messages per
+second for the network-wide tram filter - so a per-vehicle view is roughly
+two orders of magnitude cheaper than the map view, and is the subscription
+the product uses while a single vehicle is being watched.
+
+The same live check confirmed that one vehicle-scoped filter carries **every**
+per-vehicle event type (`vp`, `arr`, `ars`, `dep`, `pde`, `pas`, `doo`,
+`doc`, `tlr`, `tla`, `vjout`), so the overview needs no second subscription
+and no wildcard fan-out.
+
+### Retained per-vehicle state (bounded)
+
+| Data | Source | Retention |
+| --- | --- | --- |
+| Latest telemetry (position, `spd`, `acc`, `hdg`, `dl`, `odo`, `drst`, `occu`, `loc`, `desi`, `dir`, `jrn`, `line`, `start`, `oday`, `route`, `tst`) | `vp` | latest only |
+| Next stop id (7 characters) + headsign | `vp.stop` when present (49% of messages), else topic segments | latest only |
+| Door state | `drst` bit 0, plus the last `doo`/`doc` event | latest only |
+| TLP request + decision | `tlr`, paired with the `tla` carrying the same `tlp-requestid` | latest pair only |
+| Stop events (`arr`, `ars`, `dep`, `pde`, `pas`, `doo`, `doc`) with `stop`, `ttarr`, `ttdep`, `dl` | MQTT | rolling: at most 200 *distinct* events, session only |
+| Message identities used to collapse the broker's duplicate fan-out | topic + event type + `tst` | rolling: at most 400 identities, session only |
+| `dl` samples for the trend chart | `vp` | rolling 15-minute window, in memory |
+
+The state is a fold over *distinct* messages: the broker repeats most messages
+several times on one subscription (fact below), so a message whose topic, event
+type and `tst` were already seen within the last 400 identities is counted but
+otherwise ignored. Without that, every door event and every priority request
+would be retained four times. Raw and distinct counts are both shown, so the
+transport's behaviour stays visible instead of being silently smoothed away.
+
+Nothing is persisted: no `localStorage`, `sessionStorage`, IndexedDB or
+backend. Closing the page discards the history.
+
+Staleness is *shown*, not dropped: `vp` arrives about once per second per
+vehicle, so the overview marks the vehicle stale after 15 s without a `vp`
+and keeps the last known values (the user selected that vehicle explicitly).
+The map's `POSITION_STALENESS_MS` removal rule in
+`src/hooks/useTramPositions.ts` stays map-only.
+
+While the tab is hidden the overview closes its stream and stops its snapshot
+tick, and reconnects on focus - the same behaviour, and the same API-load
+argument, as the map page above.
+
+### Additional keyed GraphQL query
+
+The overview resolves its journey-spine stop names from the keyed Routing API
+by fetching **one trip pattern per (route, direction) per session**:
+
+```
+query { route(id: "HSL:<routeId>") { patterns { directionId headsign
+  stops { gtfsId name lat lon } } } }
+```
+
+- Verified live on 2026-09-25: `HSL:1004` returns 4 patterns (23 stops for
+  `directionId` 1) and `HSL:2015` returns 3 (34 stops), each stop with
+  `lat`/`lon`, so stop names and ahead/behind distances come from this one
+  cached query. The key is required (HTTP 401 without it, ADR-0003).
+- The pattern is selected by `directionId === Number(dir) - 1`: the MQTT
+  topic `dir` is **1-based** and the GraphQL `directionId` is **0-based**.
+  Verified on 12 live tram routes (1001-1013, 2015): every observed
+  `dir`/headsign pair matched `directionId + 1`/headsign.
+- Selection must **not** use the headsign string: the topic headsign is
+  abbreviated where GTFS is not (`Olympiaterm.` in the topic vs
+  `Olympiaterminaali` in GraphQL for routes 1002/1003).
+- The overview needs the per-session `routes` index as well, only to keep the
+  out-of-service rule identical to the map's (TV-0011, `resolveTramShortName`)
+  - that query is already cached per session and is not re-issued.
+- A failed or absent pattern query must not block telemetry: the page renders
+  the MQTT data and marks the journey spine unavailable with the reason.
+
+### Verified field facts (2026-09-25)
+
+Live-captured from `wss://mqtt.hsl.fi:443/` (20,069 tram messages over 45 s
+for the field census, plus the targeted runs named below). These are
+constraints on what the overview may claim, not implementation choices:
+
+- **`dl` is positive when the vehicle is AHEAD of schedule and negative when
+  it is BEHIND**, i.e. `dl` = timetable time minus actual time. Measured on
+  `dep` events (n=34): `dl` -60 with `ttdep - tst` = -65 s, `dl` +59 with
+  +50 s, `dl` 0 with -6/-10/-12 s; mean absolute error 18 s, limited by
+  minute-resolution timetable times. A 20 s census over 8,522 tram `vp`
+  messages (2026-09-25) found 5,390 negative (63%), 3,003 positive (35%),
+  129 zero, range -8,460 s to +719 s. The value is **recomputed at stop
+  arrival/departure computations**, so between them it is the last computed
+  value and can disagree with the wall clock - observed: a tram departing
+  34 s after `ttdep` reported `dl` 0 in the `dep` message itself and then
+  `dl` -34 in the following `due`/`arr` messages. The UI must therefore
+  present `dl` as a reported value with its own timestamp, not as a live
+  measurement, and must never invert the sign.
+- **`occu` is present but always 0 for trams**: `occu: 0` on 100% of the
+  20,069 sampled tram messages. It may be shown as a raw reported value, but
+  no occupancy visual (bar, scale, colour) may be derived from it.
+- **`drst` was observed only as 0 or 1** (`vp` 16,585 zeros / 2,984 ones;
+  `doo` 1, `doc` 0). Only bit 0 (doors open) may be presented; other bits
+  must not be invented.
+- **`tlr`/`tla` are traffic-light-priority (TLP) request/decision pairs, not
+  a signal colour or a countdown.** `tlr` carried `tlp-requesttype` values
+  `DOOR_OPEN`, `DOOR_CLOSE`, `NORMAL`, `ADVANCE`, `tlp-prioritylevel`
+  `normal`/`norequest`, `tlp-protocol` `KAR-MQTT`, plus `sid`,
+  `signal-groupid`, `tlp-signalgroupnbr`, `tlp-requestid`, `tlp-line-configid`,
+  `tlp-point-configid`, `tlp-frequency`, `tlp-att-seq`; the matching `tla`
+  carried `tlp-requestid` and `tlp-decision` (`ACK` observed). Note that a
+  TLP request is not only about signals: `DOOR_OPEN`/`DOOR_CLOSE` are request
+  types too.
+- **`loc` was observed as `GPS` on 98.9% of tram messages and `DR` (dead
+  reckoning) on 1.1%** (20 s census: 8,425 `GPS` / 97 `DR` of 8,522). It is
+  informational text and must not gate rendering; `DR` means the position is
+  interpolated, which is worth showing but must not be presented as a
+  position-quality metric HFP does not provide.
+- **`vp.stop` is null in about half of tram `vp` messages** (20 s census:
+  4,322 null / 4,200 populated of 8,522, i.e. 49.3% populated), so the next
+  stop id must come from the payload when present and from the topic's
+  next-stop segment otherwise. Stop events (`arr`/`dep`/`pde`/`pas`/`doo`/
+  `doc`) always carried a real `stop` in the sampled window. (An earlier,
+  smaller sample saw only nulls; that claim was wrong and is corrected
+  here.)
+- **Every tram event type carries the same flat envelope** - `desi`, `dir`,
+  `oper`, `veh`, `tst`, `tsi`, `spd`, `hdg`, `lat`, `long`, `acc`, `dl`,
+  `odo`, `drst`, `oday`, `jrn`, `line`, `start`, `loc`, `stop`, `route`,
+  `occu` - plus type-specific extras: `ttarr`/`ttdep` on the stop events, the
+  `tlp-*`/`sid`/`signal-groupid` block on `tlr`, and `tlp-requestid` +
+  `tlp-decision` on `tla` (which has no `sid` field even though its topic
+  carries the extra `sid` level). One parser therefore covers all of them,
+  and a topic whose event type is unknown can still yield the envelope.
+- Tram `vp` payload fields: `desi`, `dir`, `oper`, `veh`, `tst`, `tsi`,
+  `spd`, `hdg`, `lat`, `long`, `acc`, `dl`, `odo`, `drst`, `oday`, `jrn`,
+  `line`, `start`, `loc`, `stop`, `route`, `occu`. `desi` is the display line
+  (digits with an optional trailing letter) and `line` is the GTFS line id
+  (e.g. 32 for route `1004`), so `line` is not a display name.
+- Only operator `40` appeared as a tram operator in the samples; the operator
+  padding above is the only assumption made about it.
+- `desi` (the display line) began with a digit in 99.1% of the 8,522 `vp`
+  messages; it is display text and must not be parsed into a line number.
+- **The broker repeats most messages about four times on a single
+  subscription.** Measured with a bare MQTT-over-WebSocket client on
+  `/hfp/v2/journey/ongoing/+/tram/0040/00608/#` (2026-09-25, 30 s): 120 raw
+  messages were 33 distinct `topic|tst|type` values, and the multiplicity
+  histogram was 29 messages arriving 4x and 4 arriving once; the repeats
+  carry byte-identical payloads and arrive within the same millisecond. The
+  browser trace of TV-0017's own page agreed independently: 392 raw `vp`
+  messages were 98 distinct `tsi` values (exactly 4x), and the network-wide
+  map filter showed the same ratio (~2,500 raw frames in 7 s for ~150
+  vehicles). Duplicate collapsing is therefore a transport fact, not a
+  display choice.
+
+### Consequences
+
+- The overview page's data path is one vehicle-scoped MQTT filter plus two
+  cached per-session keyed queries (the existing `routes` index and one
+  pattern per route+direction). Its MQTT load is ~1/100th of the map page's;
+  it never subscribes to the network-wide filter.
+- The overview must collapse duplicate deliveries before retaining anything:
+  a repeat counts as one received message, not as a second door event, a
+  second priority request or a second `dl` sample. Counts of raw and distinct
+  messages are both shown.
+- Because `dl` is sign-inverted relative to the earlier mockups, every
+  user-facing early/late string on the overview is a derived claim that the
+  task's acceptance verifies against a live stop event.
+- Revisit this amendment if HFP changes the topic layout (padding, the
+  variable-length tail, or per-event fields), or if HSL starts populating
+  `occu` or publishes stop sequences on the MQTT side.
