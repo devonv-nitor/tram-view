@@ -2,20 +2,25 @@ import { useEffect, useRef } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import type { TramPosition } from "../lib/digitransit.ts";
+import { tryGetDigitransitApiKey } from "../lib/digitransit.ts";
 import { TramMarkerLayer } from "./TramMarkers";
 import {
   DEFAULT_MAP_ZOOM,
   HELSINKI_TRAM_NETWORK_CENTER,
   MAP_TILE_ATTRIBUTION,
-  MAP_TILE_URL,
+  MAP_TILE_TILE_SIZE,
+  MAP_TILE_ZOOM_OFFSET,
   MAX_MAP_ZOOM,
   MIN_MAP_ZOOM,
+  mapTileUrl,
 } from "./constants";
 
 /**
  * Full-viewport interactive map of the Helsinki tram network.
- * Basemap per Docs/ADR/0001-map-library.md: Leaflet + OpenStreetMap tiles.
- * Live tram markers (TV-0005) are managed imperatively in TramMarkerLayer.
+ * Basemap per the Docs/ADR/0001-map-library.md amendment: Leaflet + the
+ * Digitransit Map API's `hsl-map` tiles (TV-0018), which need the same
+ * subscription key as the line-metadata query. Live tram markers (TV-0005)
+ * are managed imperatively in TramMarkerLayer, above the basemap.
  */
 export default function MapView({ positions }: { positions: TramPosition[] }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -34,10 +39,19 @@ export default function MapView({ positions }: { positions: TramPosition[] }) {
       maxZoom: MAX_MAP_ZOOM,
     });
 
-    L.tileLayer(MAP_TILE_URL, {
-      attribution: MAP_TILE_ATTRIBUTION,
-      maxZoom: MAX_MAP_ZOOM,
-    }).addTo(map);
+    // Without a key there is no basemap: the tiles are keyed (no fallback to
+    // a key-free provider, so the map never silently shows a different style),
+    // and the status panel's missing-key error is the explanation.
+    const subscriptionKey = tryGetDigitransitApiKey();
+    if (subscriptionKey !== null) {
+      L.tileLayer(mapTileUrl(subscriptionKey), {
+        attribution: MAP_TILE_ATTRIBUTION,
+        tileSize: MAP_TILE_TILE_SIZE,
+        zoomOffset: MAP_TILE_ZOOM_OFFSET,
+        minZoom: MIN_MAP_ZOOM,
+        maxZoom: MAX_MAP_ZOOM,
+      }).addTo(map);
+    }
 
     markersRef.current = new TramMarkerLayer(map);
 

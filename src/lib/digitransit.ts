@@ -2,8 +2,10 @@
  * Digitransit routing API GraphQL client: tram line metadata, API key
  * handling, and the tram-line short-name filter. Transport decision:
  * Docs/ADR/0002-data-transport.md. The key is read from import.meta.env
- * (sourced from the untracked .env.local) and only ever sent to the
- * digitransit routing API.
+ * (sourced from the untracked .env.local). TV-0018: the same key also
+ * authenticates the map's basemap tile requests (Docs/ADR/0001-map-library.md
+ * amendment, Docs/ADR/0003-public-api-key-policy.md amendment) - this module
+ * stays the single owner of how it is read, and no key value is ever logged.
  */
 
 const ROUTING_GRAPHQL_ENDPOINT =
@@ -62,13 +64,23 @@ interface GraphQLResponseBody<T> {
   errors?: { message: string }[];
 }
 
+/** Reads the digitransit API key, or null when none is configured.
+ * import.meta.env is undefined when the module runs outside Vite (e.g.
+ * under Node for live verification). TV-0018: the map asks for the key
+ * before adding the basemap tile layer, so that state must not throw - the
+ * throwing accessor below stays the one the data clients use. */
+export function tryGetDigitransitApiKey(): string | null {
+  const key = import.meta.env?.VITE_DIGITRANSIT_API_KEY;
+  return typeof key === "string" && key.trim() !== "" ? key : null;
+}
+
 /** Reads the digitransit API key. import.meta.env is undefined when the
  * module runs outside Vite (e.g. under Node for live verification). */
 export function getDigitransitApiKey(): string {
-  const key = import.meta.env?.VITE_DIGITRANSIT_API_KEY;
-  if (typeof key !== "string" || key.trim() === "") {
+  const key = tryGetDigitransitApiKey();
+  if (key === null) {
     throw new MissingApiKeyError(
-      "Missing Digitransit API key: set VITE_DIGITRANSIT_API_KEY in .env.local (copy .env.example), then restart the dev server. See Docs/digitransit.md.",
+      "Missing Digitransit API key: set VITE_DIGITRANSIT_API_KEY in .env.local (copy .env.example), then restart the dev server. The basemap tiles and the tram line labels both need it. See Docs/digitransit.md.",
     );
   }
   return key;

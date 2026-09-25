@@ -31,10 +31,13 @@ which the human accepted when choosing this policy:
   `devonv-nitor.github.io`), treated as public, revocable, and cheap to
   rotate. If it is not restricted, rotate to a restricted one before
   relying on the deployment.
-- Only the line-metadata GraphQL query uses the key (one query per
-  session; tram positions come from the key-less HFP stream, see
-  [ADR 0002](./ADR/0002-data-transport.md)), so the exposed surface is
-  small.
+- The key serves the line-metadata GraphQL query (one query per session) and,
+  since TV-0018, every basemap tile request (many per pan/zoom, CDN-cached for
+  7 days; see the [ADR 0003 amendment](./ADR/0003-public-api-key-policy.md)).
+  Tram positions come from the key-less HFP stream
+  ([ADR 0002](./ADR/0002-data-transport.md)).
+- Removing the key removes both the line numbers and the basemap, on purpose:
+  the app never falls back to a key-free tile provider.
 - The alternative considered — baking line metadata into a static file —
   remains available if the exposed key ever causes abuse (it is an
   ADR 0002 revisit).
@@ -45,23 +48,27 @@ On the deployed site the status panel therefore shows live tram data
 labeled with line numbers, instead of the key-less missing-key error
 path.
 
-## Key-less local builds (unchanged)
+## Key-less local builds
 
 `.env.local` remains the mechanism for local development: untracked, git-
 ignored, holding the developer's own key (see
 [Docs/digitransit.md](./digitransit.md)). CI runners cannot see it, so a
 local build and a CI build differ only in which key source fills the same
-variable.
+variable. A key-less build runs without the keyed data and without a basemap
+(TV-0018), showing the missing-key error path instead.
 
 ## Verifying the deployment
 
 1. On push to `main`, the **Deploy to GitHub Pages** workflow run completes
    green (<https://github.com/devonv-nitor/tram-view/actions>).
 2. Open <https://devonv-nitor.github.io/tram-view/> and hard refresh: the
-   page loads with the Helsinki map, no wrong-base-path 404s.
+   page loads with the Helsinki map in the HSL basemap style (TV-0018; no
+   OpenStreetMap-standard tiles), and no wrong-base-path 404s.
 3. The status panel goes live with line numbers labeled (the injected
    public key serves the line-metadata query); the tram position stream
-   connects regardless (positions need no key).
+   connects regardless (positions need no key). The same key serves the
+   basemap tiles, so a broken key leaves both the labels and the basemap
+   missing.
 
 If the repository is renamed or moved, the site URL changes and
 `base` in `vite.config.ts` must change with it.

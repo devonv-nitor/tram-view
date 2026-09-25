@@ -87,3 +87,54 @@ constraints:
 - Local development keeps `.env.local` (a developer's own key); CI
   builds differ from local builds only in the key's source, not its
   handling.
+
+## Amendment: the key also authenticates basemap tile requests
+
+- **Status:** Accepted (2026-09-25, user decision); implemented by
+  [TV-0018](../../Tasks/TV-0018-hsl-basemap-tiles.md).
+- **Decides:** that the single published key now also covers the map's
+  basemap tiles, and what does not change because of it.
+- **Refines, does not replace, the Decision above:** the key is still the
+  one public credential, still provided through the repo secret for
+  deployed builds and `.env.local` locally, and still read in exactly one
+  place (`src/lib/digitransit.ts`).
+
+The Context above states that the key was needed for "exactly one thing"
+(the per-session line-metadata query). The
+[ADR 0001 basemap amendment](./0001-map-library.md) switches the basemap
+from key-free OpenStreetMap tiles to HSL's style served by the keyed
+Digitransit Map API, so that statement is no longer true: the key is now
+sent
+
+- as a `Digitransit-Subscription-Key` header on the line-metadata GraphQL
+  query (once per session), and
+- as a `digitransit-subscription-key` **query parameter** on every basemap
+  tile request (a Leaflet `<img>` cannot send headers; the parameter is the
+  documented alternative).
+
+What does not change:
+
+1. **Still public, still one key.** The tile parameter is readable from the
+   page's own image URLs and devtools exactly like the inlined bundle value;
+   no new secret, credential, or `VITE_*` value is introduced, and the HFP
+   stream stays anonymous.
+2. **Still domain/referer-restricted** to `devonv-nitor.github.io`, still
+   treated as public, revocable, and cheap to rotate. Tile requests come from
+   the same origin as the metadata query, so the existing restriction covers
+   them; local development works because the API does not enforce a referer
+   for a keyed request (probed 2026-09-25).
+3. **The fallback is unchanged.** Option C (static metadata) still removes
+   the metadata request, but it does not remove the tile requests — that
+   fallback would now need a key-free or self-hosted raster style as well.
+
+New consequences:
+
+- Key traffic grows from one request per session to one per tile (dozens per
+  pan/zoom), served by the CDN with `cache-control: public,max-age=604800`
+  (7 days) and no user data in the request.
+- A rejected or missing key now also removes the basemap: the map adds no
+  tile layer and does not fall back to a key-free provider, and the status
+  panel's missing-key error names both consumers. `tryGetDigitransitApiKey()`
+  in `src/lib/digitransit.ts` is the non-throwing read the map uses.
+- If the exposed key's tile traffic is ever abused, rotation plus a static or
+  self-hosted style is the response, not a pretence of secrecy.

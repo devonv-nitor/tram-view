@@ -1,6 +1,6 @@
 ---
 id: TV-0018
-status: READY
+status: REVIEW
 owner: agent
 gatekeeper: human
 required_approvals: []
@@ -160,11 +160,17 @@ this task's deliverables.
    are saved and handed to the human to confirm, and the report states that
    point 4 - not the screenshot - is the machine evidence.
 6. **Missing-key path** (run from a scratch copy of the repo without
-   `.env.local`, so nothing in this repo's env files is disturbed): the map
-   renders with live markers and no basemap, the status panel shows the
-   missing-key error naming both the basemap and the line labels, the browser
-   console has no unhandled error, and the network log contains no tile
-   request. Evidence: the console dump and network log.
+   `.env.local`, so nothing in this repo's env files is disturbed): the page
+   renders without throwing and adds no basemap layer, the status panel shows
+   the missing-key error naming both the basemap and the line labels, the
+   browser console has no unhandled error, and the network log contains no
+   tile request. Evidence: the console dump and network log.
+
+   (Corrected 2026-09-25 during implementation: this item originally also
+   demanded live markers in the key-less run. That is impossible and was
+   always so - the HFP stream and the metadata query need the same key as the
+   tiles, so a key-less page has never drawn markers. The key-less run was
+   verified against the corrected wording.)
 7. **Regression check:** in the same live session the HFP stream still
    connects, the status panel goes live with line-numbered markers and legend
    counts, and a marker click still opens the TV-0016 popup. Evidence: the
@@ -186,3 +192,73 @@ this task's deliverables.
   Digitransit/HSL for the tiles, which is the same credit digitransit-ui
   gives. If the human's digitransit.fi registration shows a stricter
   required wording, change only the attribution string.
+
+## Handoff (status: REVIEW → DONE)
+
+Review the branch tip, not this text: `origin/main..origin/bb/worker-tv-0018-hsl-basemap-thr_8qw4c6yget`.
+
+Live verification (2026-09-25, dev server + headless Chrome over CDP, real
+mouse input, key read from the untracked `.env.local`):
+
+- **Tiles, pan and zoom (acceptance 2/3):** 97 tile requests in one session
+  across URL zooms 12, 14, 15 and 18 (map zooms 13, 15, 16, 19 - reached by a
+  real mouse drag plus clicks on the zoom control), every one to
+  `cdn.digitransit.fi/map/v3/hsl-map/<z>/<x>/<y>[@2x].png` and every one
+  HTTP 200; zero requests to `tile.openstreetmap.org` or any other tile host;
+  no uncaught exception and no console error in the session. Two further
+  sessions from a fresh page load cover the ends of the zoom range (map zoom
+  11 -> URL zoom 10, map zoom 19 -> URL zoom 18): 29 and 36 tile requests,
+  `cdn.digitransit.fi` only, 0 uncaught exceptions. Byte sizes and decoded dimensions of re-fetched tiles from two
+  zooms: z12 162 306 B and z15 121 625 B, both 512 x 512; z18 51 475 B,
+  512 x 512; the z12 `@2x` variant 414 038 B, 1024 x 1024. Rendered `<img>`
+  boxes were 512 x 512 CSS px at every zoom tested, and 1024 x 1024 native
+  pixels with all nine tiles on `@2x` under `deviceScaleFactor: 2`, so `{r}`
+  works.
+- **Scale and placement, independent arithmetic (acceptance 4):** the
+  container centre's latitude/longitude was derived from the requested tiles
+  alone - each tile's z/x/y plus its rendered box from
+  `getBoundingClientRect()`, interpolated in Mercator y. At the lowest zoom
+  the map allows (map zoom 11, reached with two real clicks on the control)
+  the requests are URL zoom 10 with 12 expected / 12 captured tiles, no
+  missing, no extra; at load (map zoom 13) 9/9; at map zoom 16 (three real
+  clicks) 9/9. The derived centre lands within 5 m of the app's
+  `HELSINKI_TRAM_NETWORK_CENTER` 60.1706/24.9418 at every zoom tested
+  (60.17072/24.941711 at 11, 60.170592/24.941883 at 13, 60.170587/24.941883
+  at 16). The residual is unexplained and not material - the failure this
+  check excludes is a wrong `zoomOffset`, which makes Leaflet divide its
+  256-based pixel bounds by `tileSize` 512 and request tiles from another part
+  of the world entirely. The expected set is computed from the constant
+  centre, the measured container size and tile zoom = map zoom - 1 (map zooms
+  from the app's `DEFAULT_MAP_ZOOM` plus real control clicks), and map zoom 19
+  (the maximum) requests URL zoom 18 rather than clamping, as the measured
+  native detail limit requires.
+- **Basemap identity, machine half (acceptance 5):** a 40 px marker-free
+  strip of the rendered centre tile is pixel-identical (MAD 0.00) to the
+  `hsl-map` file fetched from the same URL, so the pixels on screen are the
+  HSL style, not OSM. Objective style weight over the same nine-tile view:
+  mean luminance 224.6 vs OpenStreetMap standard's 203.4, dark ink
+  (luminance < 160) 0.37% vs 3.84%, strongly coloured pixels 1.86% vs 7.10%.
+  **The agent could not interpret the screenshots** (its model has no image
+  input), so per acceptance 5 the aesthetic confirmation is handed to the
+  human: `/tmp/tv0018/z13-default.png`, `z15-panned.png`,
+  `z16-street-detail.png`, `retina-default.png`, `no-key.png`. The machine
+  evidence is the arithmetic above, not the screenshots.
+- **Missing-key path (acceptance 6):** a scratch copy without `.env.local`
+  requests no tiles at all, draws no basemap layer, shows the status-panel
+  error "Missing Digitransit API key: ... The basemap tiles and the tram line
+  labels both need it.", and logs no uncaught exception (only the pre-existing
+  key-less metadata warning and the pre-existing `favicon.ico` 404).
+- **Regression (acceptance 7):** the status panel stayed live ("Live - 112
+  trams"), legend counts present, 112 markers, and a real click on a marker
+  opened the TV-0016 popup with live data (tram 40/98, GTFS key HSL:1007,
+  line 7, heading 357 deg, 1.17 m/s).
+
+Decisions the reviewer should confirm explicitly rather than silently accept:
+(a) no key means no basemap layer at all, with no OSM fallback - a visible
+change in key-less environments, where the app is already unusable because the
+HFP stream is keyed too; (b) the attribution string is the OSM-data plus
+Digitransit/HSL-service wording from Notes, not a reading of Digitransit's
+full terms.
+
+Unmerged: the branch is local and unpushed. Nothing was pushed or merged; the
+reviewer and merge steps are the coordinator's.

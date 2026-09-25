@@ -9,16 +9,17 @@ polling) is recorded in
 
 | Data | Transport | API key |
 | ---- | --------- | ------- |
+| Map basemap (HSL's generic map style, no transit geometry) | Digitransit Map API raster tiles, `GET https://cdn.digitransit.fi/map/v3/hsl-map/{z}/{x}/{y}{r}.png?digitransit-subscription-key=<key>` (512 px tiles, CDN-cached 7 days; TV-0018) | required |
 | Tram vehicle positions (lat/lon, heading, speed, direction, route id, vehicle number) | HFP MQTT over WebSockets, `wss://mqtt.hsl.fi:443/`, topic `/hfp/v2/journey/ongoing/vp/tram/#` (push, ~1 update/s per vehicle) | not needed |
 | Tram line metadata (route id -> short name, mode) | Routing API v2 GraphQL, `POST https://api.digitransit.fi/routing/v2/hsl/gtfs/v1`, query `routes { gtfsId shortName mode }`, fetched once per session and cached | required |
 | One vehicle's full HFP event stream (position, stop events, doors, traffic-light priority) | same MQTT broker, filter `/hfp/v2/journey/ongoing/+/tram/<oper>/<veh>/#` - one vehicle, every event type (TV-0017) | not needed |
 | One line's stop sequence | Routing API v2 GraphQL, query `route(id: "HSL:<routeId>") { patterns { directionId headsign stops { gtfsId name lat lon } } }`, once per (route, direction) per session and cached (TV-0017) | required |
 
-The positions subscription is anonymous. The line-metadata query requires a
-digitransit subscription key; without one the app shows a clear error instead
-of silently hiding data, because the tram-line filter (short names 1-15 with
-an optional trailing letter, or a single letter) cannot be applied without
-the metadata.
+The positions subscription is anonymous. The line-metadata query and the
+basemap tiles require a digitransit subscription key; without one the app
+shows a clear error instead of silently hiding data or silently switching to a
+different map style: the line numbers cannot be resolved without the metadata,
+and the map renders no basemap layer at all (TV-0018 - no key-free fallback).
 
 Out-of-service trams (TV-0011): a vehicle whose latest position resolves to
 no displayed GTFS tram line - depot shunting, training/testing, or an absent
@@ -75,7 +76,13 @@ small status panel (`src/components/TramStatusPanel.tsx`) reports the state
 of the data client:
 
 - an error box with the reason when the API key is missing or rejected, or
-  the connection fails;
+  the connection fails (since TV-0018 that includes the basemap: the same key
+  serves it);
+- the map itself: the HSL basemap tiles are requested with the key in their
+  URL, so a working key means the HSL style is visible under the markers,
+  and no key means no basemap layer and no tile request at all (key-less
+  pages draw no markers either: `useTramPositions` starts the vehicle stream
+  only once the keyed line metadata has resolved);
 - "Loading tram line metadata..." while the keyed GraphQL query runs;
 - "Connecting to the tram position stream..." while the MQTT subscription
   comes up;
@@ -156,6 +163,22 @@ vehicle's reported heading, and a hover tooltip with the full model name,
 managed by `src/map/TramMarkers.ts`; an out-of-service vehicle swaps the
 line short name for the red not-in-service dot, and the SpåraKoff bar tram
 (TV-0013) always shows its `K` and its own color instead of both).
+
+TV-0018: the basemap is the Digitransit Map API's `hsl-map` source (HSL's
+generic style, 512 px raster tiles) instead of OpenStreetMap standard tiles;
+the decision, the compared alternatives and the measured tile facts are in the
+[ADR 0001 amendment](./ADR/0001-map-library.md), and the key's new surface in
+the [ADR 0003 amendment](./ADR/0003-public-api-key-policy.md). The tile URL is
+built in `src/map/constants.ts` (`mapTileUrl()`, with Leaflet's `{r}` retina
+placeholder) and the layer is added in `src/map/MapView.tsx` with
+`tileSize: 512` and `zoomOffset: -1` - the mapping measured on 2026-09-25,
+where a 512 px tile at z/x/y covers the same ground as the 256 px source at the
+same z/x/y, so the app asks for the tile one zoom below the map zoom. The key
+is read through `tryGetDigitransitApiKey()`: with no key there is no basemap
+and no unauthenticated tile request, and the status panel's missing-key error
+is the explanation. `MAX_MAP_ZOOM` stays 19, which requests at most URL zoom 18
+(above that the service adds no detail); zoom levels 11-19 and the default
+center/zoom are unchanged.
 
 TV-0016: clicking or tapping a marker body opens a Leaflet popup bound to
 that marker (`src/map/TramMarkerPopup.ts`), so it follows the tram as it
