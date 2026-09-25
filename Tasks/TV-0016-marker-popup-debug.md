@@ -139,4 +139,17 @@ Implemented on `bb/worker-tv-0016-marker-debug-popup-thr_q62yd7bcnm`
 - **Known limitations**: mobile/small-viewport behavior is verified
   manually by the user after merge (Leaflet default popup sizing, no
   custom breakpoint logic); popup content is built as an HTML string
-  from feed values — escaped, but reviewed as presentation only.
+  from feed values — all row values and the summary are escaped at
+  their HTML insertion points (`row()`, the summary `<p>`) after the
+  reviewer round; because `positionsEqual` (untouched per the task's
+  constraints) does not compare `receivedAt`/`speed`, a fully
+  stationary vehicle with only `receivedAt` advancing does not trigger
+  a new snapshot, so an open popup's freshness age advances on the
+  snapshots that do produce a new array, not every second (reviewer
+  observation, inherent to the untouched snapshot-equality logic).
+- **Reviewer round 1**: CHANGES_REQUESTED (thr_47bckq985g @
+  eff99d22) — feed-derived values in the route-resolution rows were
+  inserted unescaped. Fixed by escaping at the single insertion point
+  (`row()` escapes label and value; summary text already escaped at
+  its `<p>`), so values are escaped exactly once and never
+  double-escaped through the summary path.

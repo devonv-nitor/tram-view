@@ -14,9 +14,12 @@ import {
 } from "../lib/digitransit.ts";
 import { isSparakoffBarTram, tramCategoryInfo } from "../lib/fleet.ts";
 
-/** Escapes feed-derived values (the raw HFP routeId is unvalidated feed
- * data) before they go into the popup's innerHTML. Internal constants and
- * validated line names pass through unchanged. */
+/** Escapes one string for safe interpolation into the popup's innerHTML
+ * (the raw HFP routeId is unvalidated feed data; the GTFS gtfsId,
+ * shortName, and mode are derived from feed/query data). Every readout
+ * row and the summary paragraph are escaped exactly once at their HTML
+ * insertion points — see row() — so feed-derived values can never reach
+ * the popup's DOM unescaped (TV-0016 reviewer round). */
 function escapeHtml(value: string): string {
   let out = "";
   for (const ch of value) {
@@ -43,8 +46,17 @@ function escapeHtml(value: string): string {
   return out;
 }
 
+/** One readout row. Both the label and the value are escaped here — the
+ * single HTML insertion point for the readout — so every feed-derived
+ * value (the raw HFP routeId, the GTFS gtfsId/shortName/mode derived from
+ * it, all unvalidated) is escaped exactly once before it reaches the
+ * popup's innerHTML (TV-0016 reviewer round: the route-resolution rows
+ * previously interpolated these values unescaped). reasonText() and
+ * summaryText() therefore return plain text; summary text is escaped at
+ * its own <p> insertion point, and values passing through it are never
+ * pre-escaped, so nothing is double-escaped. */
 function row(label: string, value: string): string {
-  return `<dt>${escapeHtml(label)}</dt><dd>${value}</dd>`;
+  return `<dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd>`;
 }
 
 /** Human-readable reason for one route-resolution outcome (TV-0016): the
