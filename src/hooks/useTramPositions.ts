@@ -125,11 +125,6 @@ export function useTramPositions(): TramPositionsState {
 
     let stream: TramStreamHandle | null = null;
     let snapshotTimer: number | null = null;
-    // True while the current stream is being closed on purpose (page unmount,
-    // hidden tab). The client reports socket errors regardless of a deliberate
-    // close - the broker's close frame races ours - so that late error must
-    // not be logged or shown as a stream failure.
-    let streamClosed = false;
 
     const takeSnapshot = () => {
       setState((prev) => {
@@ -184,8 +179,14 @@ export function useTramPositions(): TramPositionsState {
 
     const start = () => {
       if (stream === null) {
-        streamClosed = false;
-        stream = subscribeTramPositions({
+        // The client reports a socket error even when we closed it on purpose
+        // (the broker's close frame races ours), so a stream we closed must not
+        // log or show anything. The flag is scoped to this one stream, not to
+        // the effect: a flapping tab can close and replace the stream inside one
+        // effect run, and a late error from the old socket must not be reported
+        // as a failure of the new one.
+        let closed = false;
+        const handle = subscribeTramPositions({
           onPosition: (position) => {
             latestPositionsRef.current.set(vehicleKey(position), position);
           },
@@ -193,7 +194,7 @@ export function useTramPositions(): TramPositionsState {
             connectedRef.current = connected;
           },
           onError: (error) => {
-            if (streamClosed) return;
+            if (closed) return;
             console.error(
               "[tram-view] tram position stream error:",
               error.message,
@@ -201,6 +202,12 @@ export function useTramPositions(): TramPositionsState {
             setState((prev) => ({ ...prev, status: "error", error }));
           },
         });
+        stream = {
+          close: () => {
+            closed = true;
+            handle.close();
+          },
+        };
       }
       if (snapshotTimer === null) {
         takeSnapshot();
@@ -214,7 +221,6 @@ export function useTramPositions(): TramPositionsState {
         snapshotTimer = null;
       }
       if (stream !== null) {
-        streamClosed = true;
         stream.close();
         stream = null;
         connectedRef.current = false;
