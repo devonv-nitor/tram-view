@@ -1,6 +1,6 @@
 # Tram view plan
 
-Status: `All tasks complete — TV-0002..TV-0015 merged and verified (MVP accepted; ADR-0003 key policy live). No outstanding work.`
+Status: `TV-0002..TV-0015 merged and verified (MVP accepted; ADR-0003 key policy live). Outstanding: TV-0016 (marker click popup with red-dot debug info).`
 
 The application is a live view of all of the trams currently active in the HSL network,
 providing an at-a-glance view of the state of the tram system.
@@ -25,9 +25,10 @@ All tasks are merged, delta-reviewed, and retired; `Tasks/` holds only the
 | ~~TV-0013~~                                    | DONE — SpåraKoff bar tram (car #175): special marker + panel entry |
 | ~~TV-0014~~                                    | DONE — UI cleanup: hide empty Unknown row, no letters in tooltips |
 | ~~TV-0015~~                                    | DONE — Collapsible status panel: semi-transparent circle when collapsed |
+| [TV-0016](Tasks/TV-0016-marker-popup-debug.md) | Marker click popup: red-dot decision debug readout                |
 
 Dependency flow: TV-0002…TV-0014 — **all merged and verified; the MVP is
 shipped and the post-MVP polish wave (TV-0012..TV-0014) is complete.** The
 deployed site is live at <https://devonv-nitor.github.io/tram-view/>
-(public key policy per ADR-0003). New work:
+(public key policy per ADR-0003). Outstanding: **TV-0016**. New work:
 define tasks from [Tasks/_template.md](Tasks/_template.md).
