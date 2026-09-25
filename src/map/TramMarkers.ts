@@ -1,6 +1,6 @@
 /**
  * Imperative Leaflet marker layer for live tram markers (TV-0005, TV-0008,
- * TV-0009, TV-0011, TV-0013).
+ * TV-0009, TV-0011, TV-0013, TV-0016).
  * One directional marker per vehicle: a teardrop body with the line short
  * name inside, colored by the vehicle's rolling stock category, rotated so
  * its point faces the vehicle's reported heading, and carrying a native
@@ -8,6 +8,12 @@
  * resolves to no displayed tram line (TV-0011: depot shunting/testing,
  * absent routes) keeps the category-colored body and heading rotation and
  * shows a red not-in-service dot in place of the line number.
+ * TV-0016: clicking/tapping a marker body opens a Leaflet popup bound to
+ * the marker - it follows the tram, refreshes its debug readout (every
+ * input to the red-dot decision) on every snapshot in the same per-marker
+ * pass, closes when the vehicle drops from the snapshot, and shows one
+ * popup at a time (src/map/TramMarkerPopup.ts builds the content; the
+ * rendering decisions never consult it).
  * Direction source and live evidence (Tasks/TV-0008-tram-direction.md): the
  * HFP `hdg` field the payload already carries - verified live to match the
  * direction of travel and to persist for stopped vehicles - so no extra
@@ -34,6 +40,7 @@ import {
   type TramCategoryInfo,
 } from "../lib/fleet.ts";
 import { vehicleKey } from "../lib/hfp.ts";
+import { buildTramDebugHtml } from "./TramMarkerPopup.ts";
 
 /** Marker body diameter in px; the line label sits centered inside the
  * rounded body and the teardrop point extends beyond it in the heading
@@ -140,6 +147,11 @@ function tooltipText(position: TramPosition, info: TramCategoryInfo): string {
 
 export class TramMarkerLayer {
   private readonly markers = new Map<string, L.Marker>();
+  /** TV-0016: the latest snapshot position per vehicle, kept so the popup
+   * can be rebuilt from the current state on click and refreshed on every
+   * snapshot. Read-only debug state - the popup never mutates it, and the
+   * rendering decisions keep using the update() argument alone. */
+  private readonly latestPositions = new Map<string, TramPosition>();
 
   constructor(private readonly map: L.Map) {
     // The markers show line numbers only; the data itself is surfaced in the
@@ -150,7 +162,8 @@ export class TramMarkerLayer {
   /** Syncs the layer to one snapshot: moves existing markers in place, adds
    * vehicles new to the feed, removes vehicles that disappeared, and
    * refreshes the icon (heading rotation and label) of vehicles that
-   * changed. */
+   * changed. TV-0016: the open popup's debug readout refreshes in the same
+   * per-marker pass - no second render path. */
   update(positions: TramPosition[]): void {
     const present = new Set<string>();
     for (const position of positions) {
@@ -159,29 +172,75 @@ export class TramMarkerLayer {
       const marker = this.markers.get(key);
       if (marker === undefined) {
         const info = tramCategoryInfo(position.vehicleNumber);
-        this.markers.set(
-          key,
-          L.marker([position.lat, position.lon], {
-            icon: createTramIcon(position, info),
-            // TV-0009: full model name per vehicle, one hover away; Leaflet
-            // applies it to the icon element as the native tooltip.
-            title: tooltipText(position, info),
-            // Display-only markers; panning and zooming stay with the map.
-            interactive: false,
-            keyboard: false,
-          }).addTo(this.map),
-        );
+        const created = L.marker([position.lat, position.lon], {
+          icon: createTramIcon(position, info),
+          // TV-0009: full model name per vehicle, one hover away; Leaflet
+          // applies it to the icon element as the native tooltip.
+          title: tooltipText(position, info),
+          // Display-only markers; panning and zooming stay with the map.
+          interactive: false,
+          keyboard: false,
+        }).addTo(this.map);
+        this.bindDebugPopup(key, created, position);
+        this.markers.set(key, created);
       } else {
         marker.setLatLng([position.lat, position.lon]);
         this.syncIcon(marker, position);
+        // TV-0016: the tram keeps moving, so stale debug info is worse than
+        // none - refresh the open popup's readout with this snapshot in the
+        // same per-marker pass. Markers move via setLatLng, which Leaflet's
+        // bindPopup hooks ('move' event) to keep the popup anchored to the
+        // marker, not to a map point.
+        if (marker.isPopupOpen()) {
+          marker.setPopupContent(buildTramDebugHtml(position));
+        }
       }
+      this.latestPositions.set(key, position);
     }
     for (const [key, marker] of this.markers) {
       if (!present.has(key)) {
         marker.remove();
         this.markers.delete(key);
+        this.latestPositions.delete(key);
       }
     }
+  }
+
+  /** TV-0016: binds the debug popup to the marker (not a map point) and
+   * opens it on a real click/tap on the marker body. Leaflet's own click
+   * handling stays off (interactive: false is untouched - the markers keep
+   * zero Leaflet event targets); the popup opens from this listener instead,
+   * and stopPropagation keeps the click from bubbling to the map container,
+   * where the default close-on-map-click would instantly close it. The
+   * readout is rebuilt from the latest snapshot at open time, so it is
+   * fresh even after the popup sat unopened. */
+  private bindDebugPopup(
+    key: string,
+    marker: L.Marker,
+    position: TramPosition,
+  ): void {
+    marker.bindPopup(buildTramDebugHtml(position));
+    marker.getElement()?.addEventListener("click", (event) => {
+      event.stopPropagation();
+      this.openDebugPopup(key);
+    });
+  }
+
+  /** TV-0016: opens (or re-targets) the one debug popup for a vehicle.
+   * Leaflet's map keeps a single popup: opening one marker's popup closes
+   * any other, so clicking a different marker rewrites it. Content is
+   * rebuilt first from the latest snapshot; an already-open popup is left
+   * open (no close/reopen flicker, no re-pan) - its content refreshes on
+   * every snapshot in update(). The popup closes by itself when the vehicle
+   * drops from the snapshot: bindPopup closes it on the marker's 'remove'
+   * event. */
+  private openDebugPopup(key: string): void {
+    const marker = this.markers.get(key);
+    const position = this.latestPositions.get(key);
+    if (marker === undefined || position === undefined) return;
+    marker.setPopupContent(buildTramDebugHtml(position));
+    if (marker.isPopupOpen()) return;
+    marker.openPopup();
   }
 
   /** Updates one existing marker's icon DOM in place: the rotor rotation
@@ -245,5 +304,6 @@ export class TramMarkerLayer {
       marker.remove();
     }
     this.markers.clear();
+    this.latestPositions.clear();
   }
 }

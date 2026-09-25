@@ -325,6 +325,55 @@ body {
   position: relative;
 }
 
+/* TV-0016 marker debug popup: the content lives inside Leaflet's default
+   popup chrome (default sizing/close button/map-click/Esc close are all
+   Leaflet defaults - no custom breakpoint logic). Readout styling only:
+   a compact two-column field list for the red-dot decision inputs. */
+.tram-debug-popup {
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.tram-debug-popup__title {
+  margin: 0 0 0.4rem;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.tram-debug-popup__fields {
+  margin: 0;
+}
+
+.tram-debug-popup__fields dt {
+  float: left;
+  clear: left;
+  width: 11.5rem;
+  color: color-mix(in srgb, currentColor 65%, transparent);
+}
+
+.tram-debug-popup__fields dd {
+  margin: 0 0 0.15rem 12rem;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+/* The render-decision summary line: the one-sentence answer for why the
+   marker is red-dot or not, at the bottom of the readout. */
+.tram-debug-popup__summary {
+  margin: 0.5rem 0 0;
+  padding-top: 0.4rem;
+  border-top: 1px solid color-mix(in srgb, currentColor 20%, transparent);
+  font-weight: 600;
+}
+
+/* Red-dot verdicts get the offline dot's exact signal color (TV-0011) so
+   the summary reads against the marker itself. The popup floats over the
+   light OSM tiles like the markers, so the color is fixed, not
+   color-scheme aware. */
+.tram-debug-popup__summary--offline {
+  color: #d32f2f;
+}
+
 /* TV-0010 brand hues: A/B/C bodies are light, so the white ink inherited
    from .tram-marker would fall far below the >=4.5:1 the :root comment
    documents (worst 1.7:1 on the amber); #1a1a1a restores >=5.5:1 on all

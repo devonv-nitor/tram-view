@@ -35,6 +35,13 @@ export class MissingApiKeyError extends Error {
 export interface TramPosition {
   /** Line short name, or null when the route is not a displayed tram line. */
   routeShortName: string | null;
+  /** Raw HFP route id without the feed prefix (e.g. "1009TX"), as reported
+   * by the vehicle's latest position event (TV-0016: the marker popup's
+   * route-resolution readout distinguishes the raw id from the resolved
+   * line). Already flowed through the snapshot spread; only declared here.
+   * Not part of the snapshot equality - consumers re-render on the resolved
+   * routeShortName, never on the raw id, so rendering is unchanged. */
+  routeId: string;
   directionId: string;
   operatorId: number;
   vehicleNumber: number;
@@ -106,6 +113,28 @@ async function graphQlRequest<T>(query: string, apiKey: string): Promise<T> {
 
 let tramRouteIndexPromise: Promise<Map<string, string>> | null = null;
 
+/** TV-0016: the raw route records from the one per-session metadata query,
+ * retained as a byproduct of buildTramRouteIndex so the marker popup's
+ * debug route resolution can tell the filtered index's conflated null-reasons
+ * apart (route absent from GTFS vs not TRAM mode vs null shortName vs
+ * shortName failing the line criteria) without a second request. The
+ * rendering path never reads this; it is consulted only by
+ * resolveTramRouteDebug. Populated once per session alongside the index and
+ * never mutated afterwards. */
+interface RawRouteRecord {
+  gtfsId: string;
+  shortName: string | null;
+  mode: string;
+}
+let rawRouteListForDebug: Map<string, RawRouteRecord> | null = null;
+
+/** TV-0016: the tram-line index itself, retained by buildTramRouteIndex so
+ * the debug resolution answers "in the GTFS line index" against the exact
+ * index the render path resolves with - the same Map instance the hook
+ * stores, not a rebuild. Read-only for the debug path; the index and its
+ * caching are unchanged. */
+let tramLineIndexForDebug: Map<string, string> | null = null;
+
 /** Loads and caches tram line metadata (gtfsId -> short name) from the keyed
  * routing API. Cached per session; failures (including a missing API key)
  * reject rather than throw synchronously, and clear the cache so a later
@@ -127,12 +156,25 @@ async function buildTramRouteIndex(
     TRAM_ROUTES_QUERY,
     apiKey ?? getDigitransitApiKey(),
   );
+  // TV-0016: retain the raw routes and the built index for the popup's debug
+  // resolution. One per-session fetch; the index below is byte-identical to
+  // before, and this Map instance is the one the render path uses.
+  const rawRoutes = new Map<string, RawRouteRecord>();
+  for (const route of data.routes) {
+    rawRoutes.set(route.gtfsId, {
+      gtfsId: route.gtfsId,
+      shortName: route.shortName,
+      mode: route.mode,
+    });
+  }
+  rawRouteListForDebug = rawRoutes;
   const index = new Map<string, string>();
   for (const route of data.routes) {
     if (route.mode !== "TRAM" || route.shortName === null) continue;
     if (!isTramLineShortName(route.shortName)) continue;
     index.set(route.gtfsId, route.shortName);
   }
+  tramLineIndexForDebug = index;
   return index;
 }
 
@@ -151,4 +193,111 @@ export function resolveTramShortName(
   routeId: string,
 ): string | null {
   return routeIndex.get(`HSL:${routeId}`) ?? null;
+}
+
+/** Why one HFP route id resolves the way it does (TV-0016). The render path
+ * only ever sees the filtered index, where an absent key conflates several
+ * distinct reasons; the popup resolves against the retained raw route list
+ * (same session fetch, no extra request) to distinguish them:
+ * - `in-tram-line-index`: the render path's case - the route is in the
+ *   tram-line index and resolves to a displayed line.
+ * - `absent-from-gtfs`: no such gtfsId in the raw GTFS route list at all.
+ * - `not-tram-mode`: the route exists but is another GTFS mode (e.g. BUS).
+ * - `short-name-missing`: a TRAM route whose GTFS shortName is null.
+ * - `short-name-fails-line-criteria`: a TRAM route whose shortName does not
+ *   pass isTramLineShortName (the index's pre-filter). */
+export type TramRouteResolutionReason =
+  | "in-tram-line-index"
+  | "absent-from-gtfs"
+  | "not-tram-mode"
+  | "short-name-missing"
+  | "short-name-fails-line-criteria";
+
+/** Debug-only route resolution for one raw HFP routeId (TV-0016). The
+ * rendering logic never consults this - the popup reads the same session
+ * index and the retained raw route list. */
+export interface TramRouteResolution {
+  /** The exact key looked up in the GTFS data: `HSL:` + the raw routeId. */
+  gtfsId: string;
+  /** True when the filtered tram-line index (the render path's index)
+   * contains the route - the case resolveTramShortName resolves. */
+  inTramLineIndex: boolean;
+  reason: TramRouteResolutionReason;
+  /** Route mode from the raw GTFS list; null when the route is absent from
+   * it. For an indexed route this is the raw record's real mode (TRAM by
+   * construction of the index). */
+  mode: string | null;
+  /** The GTFS shortName: the indexed value when the route is in the index,
+   * else the raw GTFS shortName when the route exists there. */
+  shortName: string | null;
+  /** Whether the shortName passes isTramLineShortName, recomputed here;
+   * null when there is no shortName to test. */
+  passesLineCriteria: boolean | null;
+}
+
+/** Resolves one raw HFP route id for the marker popup's debug readout
+ * (TV-0016). Reads the session state retained by buildTramRouteIndex - no
+ * request is made and nothing is cached anew. Returns null while the
+ * per-session metadata query has not completed (in practice never seen by a
+ * popup: no marker exists before the route index loads). */
+export function resolveTramRouteDebug(
+  routeId: string,
+): TramRouteResolution | null {
+  const index = tramLineIndexForDebug;
+  const raw = rawRouteListForDebug;
+  if (index === null || raw === null) return null;
+  const gtfsId = `HSL:${routeId}`;
+  const rawRoute = raw.get(gtfsId) ?? null;
+  const indexedShortName = index.get(gtfsId);
+  if (indexedShortName !== undefined) {
+    return {
+      gtfsId,
+      inTramLineIndex: true,
+      reason: "in-tram-line-index",
+      mode: rawRoute?.mode ?? "TRAM",
+      shortName: indexedShortName,
+      passesLineCriteria: isTramLineShortName(indexedShortName),
+    };
+  }
+  if (rawRoute === null) {
+    return {
+      gtfsId,
+      inTramLineIndex: false,
+      reason: "absent-from-gtfs",
+      mode: null,
+      shortName: null,
+      passesLineCriteria: null,
+    };
+  }
+  if (rawRoute.mode !== "TRAM") {
+    return {
+      gtfsId,
+      inTramLineIndex: false,
+      reason: "not-tram-mode",
+      mode: rawRoute.mode,
+      shortName: rawRoute.shortName,
+      passesLineCriteria:
+        rawRoute.shortName === null
+          ? null
+          : isTramLineShortName(rawRoute.shortName),
+    };
+  }
+  if (rawRoute.shortName === null) {
+    return {
+      gtfsId,
+      inTramLineIndex: false,
+      reason: "short-name-missing",
+      mode: rawRoute.mode,
+      shortName: null,
+      passesLineCriteria: null,
+    };
+  }
+  return {
+    gtfsId,
+    inTramLineIndex: false,
+    reason: "short-name-fails-line-criteria",
+    mode: rawRoute.mode,
+    shortName: rawRoute.shortName,
+    passesLineCriteria: isTramLineShortName(rawRoute.shortName),
+  };
 }
