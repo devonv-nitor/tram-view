@@ -1,9 +1,8 @@
 # ADR-0001: Map library and MVP tile source
 
 - **Status:** Accepted (implemented in [TV-0003](../../Tasks/TV-0003-map-view.md));
-  basemap source amended 2026-09-25 by
-  [TV-0018](../../Tasks/TV-0018-hsl-basemap-tiles.md) — see the amendment at
-  the end of this file
+  basemap source amended 2026-09-25 by TV-0018 (DONE, merged at 048731c) — see
+  the amendment at the end of this file
 - **Date:** 2026-09-23
 - **Context:** [Docs/Idea.md](../Idea.md) — interactive Helsinki map view, deployable
   to GitHub Pages with no backend, no paid API keys for the MVP.

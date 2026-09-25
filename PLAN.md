@@ -1,6 +1,6 @@
 # Tram view plan
 
-Status: `TV-0018 (HSL basemap tiles) is DONE and merged; TV-0019 (tram line overlay) is BLOCKED on a human decision; TV-0002..TV-0017 are merged, delta-reviewed and retired (MVP accepted; ADR-0003 key policy live; ADR-0004 vehicle overview page live; ADR-0001/ADR-0003 basemap amendments implemented by TV-0018).`
+Status: `TV-0018 (HSL basemap tiles) is DONE, merged and re-verified on the deployed site; TV-0019 (tram line overlay) is BLOCKED on a human decision; TV-0002..TV-0017 are merged, delta-reviewed and retired (MVP accepted; ADR-0003 key policy live; ADR-0004 vehicle overview page live; ADR-0001/ADR-0003 basemap amendments implemented by TV-0018).`
 
 The application is a live view of all of the trams currently active in the HSL network,
 providing an at-a-glance view of the state of the tram system.
@@ -9,12 +9,11 @@ providing an at-a-glance view of the state of the tram system.
 
 | Task | Deliverable |
 | ---- | ----------- |
-| [TV-0018](Tasks/TV-0018-hsl-basemap-tiles.md) — `DONE` | Replace the OSM basemap with Digitransit HSL raster tiles (`hsl-map`, keyed Map API; ADR-0001/ADR-0003 amendments) — implemented, live-verified, human-confirmed and merged (task file retired) |
 | [TV-0019](Tasks/TV-0019-tram-line-overlay.md) — `BLOCKED` | Tram line overlay on the basemap: source and scope undecided (`Decision requested` in the task) |
 
 ## Completed work
 
-All work through TV-0017 is merged, delta-reviewed and retired; the retired
+All work through TV-0018 is merged and retired; the retired
 tasks are listed below. New work is defined from
 [_template.md](Tasks/_template.md) and listed under
 [Open work](#open-work).
@@ -36,12 +35,13 @@ tasks are listed below. New work is defined from
 | ~~TV-0015~~                                    | DONE — Collapsible status panel: semi-transparent circle when collapsed |
 | ~~TV-0016~~                                    | DONE — Marker click popup: red-dot decision debug readout         |
 | ~~TV-0017~~                                    | DONE — Per-tram overview page over a vehicle-scoped HFP subscription |
+| ~~[TV-0018](Docs/ADR/0001-map-library.md)~~    | DONE — HSL basemap tiles (`hsl-map`, keyed Map API) replacing OSM standard, with the ADR-0001/ADR-0003 amendments; merged at 048731c, deployed site re-verified (no key-free tile fallback) |
 
-Dependency flow: TV-0002…TV-0017 — **all merged and verified; the MVP is
-shipped, the post-MVP polish wave (TV-0012..TV-0016) is complete, and the
+Dependency flow: TV-0002…TV-0018 — **all merged and verified; the MVP is
+shipped, the post-MVP polish wave (TV-0012..TV-0016) is complete, the
 per-vehicle overview (TV-0017, [ADR-0004](Docs/ADR/0004-vehicle-overview-page.md))
-is live.** The deployed site is live at
-<https://devonv-nitor.github.io/tram-view/> (public key policy per ADR-0003).
-Open work is [TV-0018](Tasks/TV-0018-hsl-basemap-tiles.md) (the user-decided
-basemap swap) and [TV-0019](Tasks/TV-0019-tram-line-overlay.md) (tram line
-overlay, blocked on a human decision).
+is live, and the basemap is HSL's own style (TV-0018).** The deployed site is
+live at <https://devonv-nitor.github.io/tram-view/> (public key policy per
+ADR-0003). Open work is
+[TV-0019](Tasks/TV-0019-tram-line-overlay.md) (tram line overlay, blocked on a
+human decision).

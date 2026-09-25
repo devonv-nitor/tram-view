@@ -90,8 +90,9 @@ constraints:
 
 ## Amendment: the key also authenticates basemap tile requests
 
-- **Status:** Accepted (2026-09-25, user decision); implemented by
-  [TV-0018](../../Tasks/TV-0018-hsl-basemap-tiles.md).
+- **Status:** Accepted (2026-09-25, user decision); implemented by TV-0018
+  (DONE, merged at 048731c; see the
+  [ADR 0001 basemap amendment](./0001-map-library.md)).
 - **Decides:** that the single published key now also covers the map's
   basemap tiles, and what does not change because of it.
 - **Refines, does not replace, the Decision above:** the key is still the

@@ -4,7 +4,7 @@ status: BLOCKED
 owner: agent
 gatekeeper: human
 required_approvals: []
-depends_on: [TV-0018]
+depends_on: [TV-0018]  # merged at 048731c
 allowed_paths:
   - "src/**"
   - "Docs/**"
@@ -17,13 +17,15 @@ retry_limit: 2
 
 The user's original request (2026-09-25) was twofold: a less cluttered
 basemap *and* "the tram lines visible as an overlay on the map". The basemap
-half is decided and defined as [TV-0018](./TV-0018-hsl-basemap-tiles.md);
+half is done (TV-0018, merged at 048731c; the Digitransit Map API's `hsl-map`
+raster tiles are the basemap and draw no transit geometry - see the
+[ADR 0001 amendment](../Docs/ADR/0001-map-library.md));
 the overlay half is **not decided** - the user stated they are not sure yet
 ("I'm not sure yet on the latter"). This task stays `BLOCKED` until the
 decision below is made, then it becomes implementable as written.
 
-Background the decision needs (all probed live 2026-09-25; see TV-0018's
-verified-facts list for the basemap side):
+Background the decision needs (all probed live 2026-09-25; the basemap side
+is recorded in the [ADR 0001 amendment](../Docs/ADR/0001-map-library.md)):
 
 - Neither the OSM basemap (thin grey `railway=tram` line only) nor the HSL
   raster basemap (no transit geometry at all - no `#00985F` / `#007AC9`
