@@ -13,6 +13,7 @@ import {
   type TramRouteResolution,
 } from "../lib/digitransit.ts";
 import { isSparakoffBarTram, tramCategoryInfo } from "../lib/fleet.ts";
+import { vehicleOverviewHash } from "../lib/route.ts";
 
 /** Escapes one string for safe interpolation into the popup's innerHTML
  * (the raw HFP routeId is unvalidated feed data; the GTFS gtfsId,
@@ -205,6 +206,14 @@ export function buildTramDebugHtml(position: TramPosition): string {
   return (
     `<div class="tram-debug-popup">` +
     `<h3 class="tram-debug-popup__title">Tram ${position.operatorId}/${position.vehicleNumber} — debug</h3>` +
+    // TV-0017: the popup's single navigation affordance, the entry point to
+    // the vehicle overview page (ADR-0004). It is an ordinary fragment link -
+    // Leaflet disables click propagation inside a popup but does not
+    // preventDefault, so the browser still follows it - and the hash is built
+    // from the vehicle identity so it is deep-linkable and refresh-safe.
+    `<p class="tram-debug-popup__nav"><a class="tram-debug-popup__link" href="${escapeHtml(
+      vehicleOverviewHash(position.operatorId, position.vehicleNumber),
+    )}">Open vehicle overview →</a></p>` +
     `<dl class="tram-debug-popup__fields">` +
     row(
       "Vehicle key (oper/veh)",

@@ -11,6 +11,8 @@ polling) is recorded in
 | ---- | --------- | ------- |
 | Tram vehicle positions (lat/lon, heading, speed, direction, route id, vehicle number) | HFP MQTT over WebSockets, `wss://mqtt.hsl.fi:443/`, topic `/hfp/v2/journey/ongoing/vp/tram/#` (push, ~1 update/s per vehicle) | not needed |
 | Tram line metadata (route id -> short name, mode) | Routing API v2 GraphQL, `POST https://api.digitransit.fi/routing/v2/hsl/gtfs/v1`, query `routes { gtfsId shortName mode }`, fetched once per session and cached | required |
+| One vehicle's full HFP event stream (position, stop events, doors, traffic-light priority) | same MQTT broker, filter `/hfp/v2/journey/ongoing/+/tram/<oper>/<veh>/#` - one vehicle, every event type (TV-0017) | not needed |
+| One line's stop sequence | Routing API v2 GraphQL, query `route(id: "HSL:<routeId>") { patterns { directionId headsign stops { gtfsId name lat lon } } }`, once per (route, direction) per session and cached (TV-0017) | required |
 
 The positions subscription is anonymous. The line-metadata query requires a
 digitransit subscription key; without one the app shows a clear error instead
@@ -96,6 +98,53 @@ the panel content is unmounted - removed from the accessibility tree - and
 the circle button itself is the keyboard- and screen-reader-operable control
 (`aria-expanded`, the state in its aria-label). Collapse state is
 per-session only: every page load starts expanded, nothing is persisted.
+
+TV-0017: `index.html#/vehicle/<oper>/<veh>` is a second page: the
+per-vehicle overview. It is reached from the marker popup's link (and by
+typing the URL), and it owns the only data client while it is mounted - the
+map's network-wide subscription is closed first, so one subscription runs at
+a time (the routing decision and the URL contract are
+[ADR 0004](./ADR/0004-vehicle-overview-page.md); the data and field facts are
+the [ADR 0002 amendment](./ADR/0002-data-transport.md#amendment-vehicle-scoped-subscription-for-the-vehicle-overview-page)).
+Live-measured load, 2026-09-25: the map's `vp/tram/#` stream carried ~380-400
+raw messages/s, the one-vehicle stream 3-7 raw messages/s (about 55-100x
+less). What the page shows, and the honesty limits on each reading:
+
+- **One subscription, every event type.** The scoped filter carries `vp`,
+  `due`, `arr`, `ars`, `dep`, `pde`, `pas`, `doo`, `doc`, `tlr`, `tla` for
+  that vehicle; `oper` is padded to 4 digits and `veh` to 5, and `#` must
+  terminate the filter (`tlr`/`tla` add one more topic level).
+- **Duplicate deliveries.** The broker repeats most messages about four times
+  on one subscription (measured: 120 raw = 33 distinct on a bare client; the
+  app's own trace, 392 raw `vp` = 98 distinct `tsi`). The page therefore
+  collapses a message whose topic, event type and `tst` were just seen before
+  retaining anything, and shows both counts ("97 distinct of 349 received")
+  instead of hiding the transport's behaviour.
+- **`dl` sign and age.** `dl` > 0 is ahead of schedule, `dl` < 0 is behind,
+  and it is only recomputed at stop events - so it is always shown with the
+  age of the message that carried it, never as a live measurement.
+- **Estimated arrival.** Only a stop event's own `ttarr`/`ttdep` is used
+  (`timetable - dl`); a `vp` for the same stop is newer but carries no
+  timetable time, so the estimate names the event and field it used. Nothing
+  is shown when no stop event has announced a time.
+- **`occu`** is present but 0 for every tram (100% of 20,069 sampled
+  messages), so it is shown as a raw reported value only - no occupancy
+  visual.
+- **`drst`** appeared only as 0 or 1; only bit 0 (doors open) is interpreted,
+  and the bits are printed as well as the interpretation.
+- **`tlr`/`tla`** are traffic-light-priority requests and their
+  acknowledgement, paired by `tlp-requestid` (live-verified: request
+  `DOOR_CLOSE` id 134 acknowledged by `tla` decision `ACK` id 134). They are
+  never presented as a signal colour or a countdown, and `DOOR_OPEN`/
+  `DOOR_CLOSE` request types are labelled as being about doors.
+- **`loc`** (`GPS`, or `DR` dead reckoning on ~1% of messages) is
+  informational and never gates rendering.
+- **Two staleness budgets.** 15 s without a `vp` marks the telemetry stale
+  while keeping the last values and the event history; the map's 5-minute
+  `POSITION_STALENESS_MS` removal rule stays map-only.
+- **Per-session only.** No `localStorage`, `sessionStorage`, IndexedDB or
+  cookies; the retained 200-event list, the 400 message identities and the
+  15-minute `dl` window are dropped when the page closes.
 
 Positions and line metadata are produced by `src/lib/hfp.ts` and
 `src/lib/digitransit.ts`, and surfaced to UI code as `TramPosition` objects

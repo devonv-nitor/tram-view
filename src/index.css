@@ -443,7 +443,775 @@ body {
 
 /* Out-of-service legend entry (TV-0011): a red dot, mirroring the marker's
    not-in-service dot rather than the square category swatches. */
+/* TV-0017: the popup's one navigation affordance, the entry point to the
+   vehicle overview page. Sized for a finger like every other control on the
+   overview, and it inherits the popup's light palette. */
+.tram-debug-popup__nav {
+  margin: 0 0 0.6rem;
+}
+
+.tram-debug-popup__link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 0.8rem;
+  border: 1px solid #d0d0d8;
+  border-radius: 10px;
+  background: #f4f5f8;
+  color: #1b1e22;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.tram-debug-popup__link:hover {
+  background: #e8eaf0;
+}
+
 .legend__swatch--offline {
   background: var(--tram-type-offline);
   border-radius: 50%;
+}
+
+/* ---------------------------------------------------------------------------
+   Vehicle overview page (TV-0017, Docs/ADR/0004-vehicle-overview-page.md).
+
+   Mobile first on purpose: the page is read while riding a tram, one-handed,
+   in daylight, on a ~390 px viewport. The base rules are the phone layout -
+   the answers first, then the evidence - and the two media queries only add
+   width (a second column and a floating summary from 900 px). Colors are
+   fixed light (like the markers) because the OSM tiles under the map are
+   always light; the numbers are set in a monospace face so a value that
+   changes every second does not reflow.
+   --------------------------------------------------------------------------- */
+.overview {
+  --ov-bg: #f1f3f6;
+  --ov-card: #ffffff;
+  --ov-sunken: #f7f8fa;
+  --ov-line: #e3e6eb;
+  --ov-ink: #1b1e22;
+  --ov-muted: #5a6169;
+  --ov-ahead: #1f7a4d;
+  --ov-behind: #a15c00;
+  --ov-ontime: #5b45c9;
+  --ov-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: var(--ov-bg);
+  color: var(--ov-ink);
+  font-size: 0.95rem;
+  line-height: 1.35;
+}
+
+.overview code {
+  font-family: var(--ov-mono);
+  font-size: 0.95em;
+}
+
+.overview__head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: calc(0.5rem + env(safe-area-inset-top)) 0.8rem 0.5rem;
+  background: var(--ov-card);
+  border-bottom: 1px solid var(--ov-line);
+}
+
+.overview__headline {
+  display: grid;
+  min-width: 0;
+}
+
+.overview__headline > span {
+  color: var(--ov-muted);
+  font-size: 0.76rem;
+  overflow-wrap: anywhere;
+}
+
+/* Every control on this page is at least 44x44 px (WCAG 2.5.8), because a
+   moving tram is the hardest possible pointing situation. */
+.overview__back,
+.overview__link,
+.pinned__back {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.3rem;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0 0.7rem;
+  border: 1px solid var(--ov-line);
+  border-radius: 12px;
+  background: var(--ov-sunken);
+  color: inherit;
+  font: inherit;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.overview__back--wide {
+  width: 100%;
+  margin-top: 0.7rem;
+}
+
+.overview :focus-visible {
+  outline: 2px solid #1a73e8;
+  outline-offset: 2px;
+}
+
+.overview__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 0.7rem 0.7rem 1rem;
+  display: grid;
+  gap: 0.7rem;
+  align-content: start;
+}
+
+.overview__col {
+  display: grid;
+  gap: 0.7rem;
+  align-content: start;
+  min-width: 0;
+}
+
+/* The pinned summary is a flex row of the page, not an overlay: it can never
+   permanently hide content behind itself, and it clears the home indicator on
+   phones with a safe area. */
+.pinned {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  padding: 0.55rem 0.8rem calc(0.55rem + env(safe-area-inset-bottom));
+  background: var(--ov-card);
+  border-top: 1px solid var(--ov-line);
+}
+
+.pinned__main {
+  display: grid;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.pinned__label {
+  color: var(--ov-muted);
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.pinned__stop {
+  font-size: 1.05rem;
+  overflow-wrap: anywhere;
+}
+
+.pinned__meta {
+  color: var(--ov-muted);
+  font-size: 0.74rem;
+  overflow-wrap: anywhere;
+}
+
+.card {
+  background: var(--ov-card);
+  border: 1px solid var(--ov-line);
+  border-radius: 14px;
+  padding: 0.85rem;
+  min-width: 0;
+}
+
+.card__title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.5rem;
+  margin: 0 0 0.6rem;
+  font-size: 0.95rem;
+}
+
+.card__tag,
+.card__note {
+  color: var(--ov-muted);
+  font-size: 0.74rem;
+  font-weight: 500;
+}
+
+.card__note {
+  margin: 0.6rem 0 0;
+  line-height: 1.5;
+}
+
+.pill {
+  flex: none;
+  padding: 0.25rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.pill--live {
+  background: #e8f6ee;
+  color: var(--ov-ahead);
+}
+
+.pill--stale {
+  background: #fdf1dc;
+  color: var(--ov-behind);
+}
+
+.pill--connecting {
+  background: var(--ov-sunken);
+  color: var(--ov-muted);
+}
+
+.pill--error {
+  background: #fdeceb;
+  color: #b3261e;
+}
+
+/* Schedule deviation tone (dl > 0 ahead, dl < 0 behind): the same three hues
+   everywhere a deviation is shown, so the reading is never ambiguous. */
+.delta--ahead {
+  color: var(--ov-ahead);
+}
+
+.delta--behind {
+  color: var(--ov-behind);
+}
+
+.delta--ontime {
+  color: var(--ov-ontime);
+}
+
+.delta--unknown {
+  color: var(--ov-muted);
+}
+
+.hero__identity {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.6rem;
+}
+
+.hero__line-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0 0.4rem;
+  border-radius: 12px;
+  color: var(--ov-ink);
+  font-family: var(--ov-mono);
+  font-size: 1.35rem;
+  font-weight: 700;
+}
+
+.badge--A {
+  background: var(--tram-type-a);
+}
+
+.badge--B {
+  background: var(--tram-type-b);
+}
+
+.badge--C {
+  background: var(--tram-type-c);
+}
+
+.badge--UNKNOWN {
+  background: var(--tram-type-unknown);
+  color: #ffffff;
+}
+
+.badge--sparakoff {
+  background: var(--tram-type-sparakoff);
+}
+
+.hero__title {
+  margin: 0;
+  font-family: var(--ov-mono);
+  font-size: 1.15rem;
+}
+
+.hero__sub {
+  margin: 0.15rem 0 0;
+  color: var(--ov-muted);
+  font-size: 0.78rem;
+}
+
+.hero__next {
+  margin-top: 0.85rem;
+  padding: 0.6rem 0.7rem;
+  border-radius: 12px;
+  background: var(--ov-sunken);
+}
+
+.hero__next-label {
+  display: block;
+  color: var(--ov-muted);
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.hero__next-name {
+  display: block;
+  font-size: 1.4rem;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+.hero__next-meta {
+  display: block;
+  margin-top: 0.15rem;
+  color: var(--ov-muted);
+  font-size: 0.76rem;
+}
+
+.hero__answers {
+  display: grid;
+  gap: 0.5rem;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  margin-top: 0.7rem;
+}
+
+.answer {
+  padding: 0.5rem 0.6rem;
+  border-radius: 10px;
+  background: var(--ov-sunken);
+  min-width: 0;
+}
+
+.answer__label {
+  display: block;
+  color: var(--ov-muted);
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.answer__value {
+  display: block;
+  font-family: var(--ov-mono);
+  font-size: 1rem;
+  overflow-wrap: anywhere;
+}
+
+.answer__note {
+  display: block;
+  color: var(--ov-muted);
+  font-size: 0.68rem;
+}
+
+.metrics {
+  display: grid;
+  gap: 0.5rem;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+}
+
+.metric {
+  padding: 0.5rem 0.6rem;
+  border-radius: 10px;
+  background: var(--ov-sunken);
+  min-width: 0;
+}
+
+.metric__label {
+  display: block;
+  color: var(--ov-muted);
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.metric__value {
+  display: block;
+  font-family: var(--ov-mono);
+  font-size: 0.95rem;
+  overflow-wrap: anywhere;
+}
+
+.metric__value--ahead {
+  color: var(--ov-ahead);
+}
+
+.metric__value--behind {
+  color: var(--ov-behind);
+}
+
+.metric__value--ontime {
+  color: var(--ov-ontime);
+}
+
+.metric__note {
+  display: block;
+  color: var(--ov-muted);
+  font-size: 0.66rem;
+  line-height: 1.4;
+}
+
+.spine__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.spine__stop {
+  position: relative;
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr) auto;
+  gap: 0.45rem;
+  align-items: start;
+  padding: 0.4rem 0;
+}
+
+/* The rail is drawn per row and clamped on the first and last rows, so the
+   sequence reads as one continuous line. */
+.spine__stop::before {
+  content: "";
+  position: absolute;
+  left: 11px;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: var(--ov-line);
+}
+
+.spine__stop:first-child::before {
+  top: 0.6rem;
+}
+
+.spine__stop:last-child::before {
+  bottom: calc(100% - 0.9rem);
+}
+
+.spine__dot {
+  position: relative;
+  z-index: 1;
+  width: 12px;
+  height: 12px;
+  margin: 0.25rem auto 0;
+  border-radius: 50%;
+  background: var(--ov-card);
+  border: 2px solid var(--ov-line);
+}
+
+.spine__stop--passed .spine__dot {
+  background: var(--ov-line);
+}
+
+.spine__stop--passed .spine__name {
+  color: var(--ov-muted);
+  font-weight: 500;
+}
+
+.spine__stop--next .spine__dot {
+  width: 16px;
+  height: 16px;
+  margin-top: 0.15rem;
+  background: var(--ov-ink);
+  border-color: var(--ov-ink);
+}
+
+.spine__stop--terminus .spine__dot {
+  border-radius: 3px;
+  background: var(--ov-ink);
+  border-color: var(--ov-ink);
+}
+
+.spine__name {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.spine__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  color: var(--ov-muted);
+  font-size: 0.7rem;
+}
+
+.spine__right {
+  display: grid;
+  justify-items: end;
+  gap: 0.15rem;
+}
+
+.spine__dist {
+  font-family: var(--ov-mono);
+  font-size: 0.75rem;
+}
+
+.spine__tag {
+  padding: 0.1rem 0.4rem;
+  border-radius: 999px;
+  background: var(--ov-sunken);
+  border: 1px solid var(--ov-line);
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.spine__toggle {
+  width: 100%;
+  min-height: 44px;
+  margin-top: 0.5rem;
+  border: 1px solid var(--ov-line);
+  border-radius: 12px;
+  background: var(--ov-sunken);
+  color: inherit;
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.chart__headline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.5rem;
+}
+
+.chart__headline b {
+  font-family: var(--ov-mono);
+  font-size: 1.3rem;
+}
+
+.chart__headline span {
+  color: var(--ov-muted);
+  font-size: 0.74rem;
+}
+
+.chart__plot {
+  position: relative;
+  margin-top: 0.5rem;
+}
+
+/* The plot is stretched to the available width (preserveAspectRatio none), so
+   its axis labels are HTML, not SVG text, and stay undistorted. */
+.chart__plot svg {
+  display: block;
+  width: 100%;
+  height: 96px;
+}
+
+.chart__ylabel {
+  position: absolute;
+  left: 0.4rem;
+  color: var(--ov-muted);
+  font-size: 0.65rem;
+}
+
+.chart__ylabel--top {
+  top: 0;
+}
+
+.chart__ylabel--mid {
+  top: calc(50% - 0.5em);
+}
+
+.chart__ylabel--bottom {
+  bottom: 0;
+}
+
+.doors {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.6rem;
+  padding: 0.6rem 0.7rem;
+  border-radius: 10px;
+  background: var(--ov-sunken);
+}
+
+.doors__state {
+  font-size: 1.15rem;
+  font-weight: 700;
+}
+
+.doors__bits {
+  font-family: var(--ov-mono);
+  font-size: 0.7rem;
+  color: var(--ov-muted);
+}
+
+.doors--open {
+  background: #e8f6ee;
+}
+
+.doors--closed {
+  background: var(--ov-sunken);
+}
+
+.doors--unknown {
+  background: #fdf1dc;
+}
+
+.doors__list {
+  list-style: none;
+  margin: 0.5rem 0 0;
+  padding: 0;
+  display: grid;
+  gap: 0.2rem;
+  color: var(--ov-muted);
+  font-size: 0.78rem;
+}
+
+.tlp__pair {
+  display: grid;
+  gap: 0.7rem;
+}
+
+.tlp__label {
+  color: var(--ov-muted);
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.tlp__fields {
+  list-style: none;
+  margin: 0.3rem 0 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 0.15rem 0.6rem;
+  font-size: 0.76rem;
+  overflow-wrap: anywhere;
+}
+
+.tlp__fields b {
+  font-family: var(--ov-mono);
+}
+
+.tlp__time {
+  grid-column: 1 / -1;
+  color: var(--ov-muted);
+}
+
+.events__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 22rem;
+  overflow-y: auto;
+}
+
+.events__row {
+  display: grid;
+  grid-template-columns: 4.6rem auto minmax(0, 1fr);
+  gap: 0.2rem 0.5rem;
+  align-items: baseline;
+  padding: 0.35rem 0;
+  border-top: 1px solid var(--ov-line);
+  font-size: 0.76rem;
+}
+
+.events__row:first-child {
+  border-top: none;
+}
+
+.events__time {
+  font-family: var(--ov-mono);
+  color: var(--ov-muted);
+}
+
+.events__type {
+  padding: 0.05rem 0.35rem;
+  border-radius: 6px;
+  background: var(--ov-sunken);
+  border: 1px solid var(--ov-line);
+  font-family: var(--ov-mono);
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+
+.events__type--doo,
+.events__type--doc {
+  background: #fdf1dc;
+  border-color: #f0dcb8;
+}
+
+.events__what {
+  overflow-wrap: anywhere;
+}
+
+.events__nums {
+  grid-column: 2 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  color: var(--ov-muted);
+  font-family: var(--ov-mono);
+  font-size: 0.72rem;
+}
+
+.events__none {
+  color: var(--ov-muted);
+}
+
+.raw__grid {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.2rem 0.6rem;
+  margin: 0;
+  font-size: 0.74rem;
+}
+
+.raw__grid dt {
+  color: var(--ov-muted);
+}
+
+.raw__grid dd {
+  margin: 0;
+  font-family: var(--ov-mono);
+  overflow-wrap: anywhere;
+}
+
+/* Tablet and up: two columns, wider padding, and the summary as a floating
+   bar instead of a full-width strip. */
+@media (min-width: 720px) {
+  .overview__head,
+  .overview__body {
+    padding-inline: 1rem;
+  }
+
+  .tlp__pair {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 900px) {
+  .overview__body {
+    grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr);
+    gap: 1rem;
+    padding: 1rem;
+  }
+
+  .pinned {
+    width: min(100% - 2rem, 1100px);
+    margin: 0 auto 1rem;
+    border: 1px solid var(--ov-line);
+    border-radius: 14px;
+  }
 }
