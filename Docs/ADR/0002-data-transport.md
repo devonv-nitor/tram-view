@@ -170,7 +170,10 @@ Option C.
 ## Amendment: vehicle-scoped subscription for the vehicle overview page
 
 - Status: Accepted (2026-09-25, user decision); implemented and merged
-  2026-09-25 by TV-0017 (retired task; merge commit `750d640`).
+  2026-09-25 by TV-0017 (retired task; merge commit `750d640`). TV-0021
+  removed the always-0 `occu` field from the parsed event and the page's
+  surfaces (see "Verified field facts"); the pattern-selection paragraph of
+  "Additional keyed GraphQL query" is corrected by TV-0020.
 - Decides: the MQTT subscription scope, the retained per-vehicle event set
   and retention window, and the additional keyed GraphQL query that the
   vehicle overview page needs.
@@ -215,7 +218,7 @@ and no wildcard fan-out.
 
 | Data | Source | Retention |
 | --- | --- | --- |
-| Latest telemetry (position, `spd`, `acc`, `hdg`, `dl`, `odo`, `drst`, `occu`, `loc`, `desi`, `dir`, `jrn`, `line`, `start`, `oday`, `route`, `tst`) | `vp` | latest only |
+| Latest telemetry (position, `spd`, `acc`, `hdg`, `dl`, `odo`, `drst`, `loc`, `desi`, `dir`, `jrn`, `line`, `start`, `oday`, `route`, `tst`) | `vp` | latest only |
 | Next stop id (7 characters) + headsign | `vp.stop` when present (49% of messages), else topic segments | latest only |
 | Door state | `drst` bit 0, plus the last `doo`/`doc` event | latest only |
 | TLP request + decision | `tlr`, paired with the `tla` carrying the same `tlp-requestid` | latest pair only |
@@ -290,8 +293,13 @@ constraints on what the overview may claim, not implementation choices:
   present `dl` as a reported value with its own timestamp, not as a live
   measurement, and must never invert the sign.
 - **`occu` is present but always 0 for trams**: `occu: 0` on 100% of the
-  20,069 sampled tram messages. It may be shown as a raw reported value, but
-  no occupancy visual (bar, scale, colour) may be derived from it.
+  20,069 sampled tram messages on 2026-09-25, and re-measured for TV-0021
+  (22,882 network-wide `vp` messages over 70 s, all 0; 9,435 messages over 13
+  event types on five routes, every one that carries the field carrying 0). It
+  therefore carries no information and is **not modelled or shown at all**
+  since TV-0021: it is not a field of the parsed event and appears neither as
+  a telemetry card nor in the reported-fields table. It may only come back if
+  the feed starts populating it (see the revisit note below).
 - **`drst` was observed only as 0 or 1** (`vp` 16,585 zeros / 2,984 ones;
   `doo` 1, `doc` 0). Only bit 0 (doors open) may be presented; other bits
   must not be invented.
@@ -360,4 +368,5 @@ constraints on what the overview may claim, not implementation choices:
   task's acceptance verifies against a live stop event.
 - Revisit this amendment if HFP changes the topic layout (padding, the
   variable-length tail, or per-event fields), or if HSL starts populating
-  `occu` or publishes stop sequences on the MQTT side.
+  `occu` (it may then be modelled again - TV-0021) or publishes stop sequences
+  on the MQTT side.

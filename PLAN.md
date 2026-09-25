@@ -1,6 +1,6 @@
 # Tram view plan
 
-Status: `TV-0018 (HSL basemap tiles) is DONE, merged and re-verified on the deployed site; TV-0019 (tram line overlay) is BLOCKED on a human decision; TV-0002..TV-0017 are merged, delta-reviewed and retired (MVP accepted; ADR-0003 key policy live; ADR-0004 vehicle overview page live; ADR-0001/ADR-0003 basemap amendments implemented by TV-0018).`
+Status: `TV-0021 (the overview's always-0 occupancy field) is REVIEW - implemented and verified live against the pre-change build; TV-0018 (HSL basemap tiles) is DONE, merged and re-verified on the deployed site; TV-0019 (tram line overlay) is BLOCKED on a human decision; TV-0002..TV-0017 are merged, delta-reviewed and retired (MVP accepted; ADR-0003 key policy live; ADR-0004 vehicle overview page live; ADR-0001/ADR-0003 basemap amendments implemented by TV-0018).`
 
 The application is a live view of all of the trams currently active in the HSL network,
 providing an at-a-glance view of the state of the tram system.
@@ -9,6 +9,7 @@ providing an at-a-glance view of the state of the tram system.
 
 | Task | Deliverable |
 | ---- | ----------- |
+| [TV-0021](Tasks/TV-0021-remove-occupancy-field.md) — `REVIEW` | Vehicle overview showed a permanent `Occupancy 0` tile and `occu` row for a field the feed always reports as 0 → removed from the parser and the page |
 | [TV-0019](Tasks/TV-0019-tram-line-overlay.md) — `BLOCKED` | Tram line overlay on the basemap: source and scope undecided (`Decision requested` in the task) |
 
 ## Completed work

@@ -202,7 +202,6 @@ interface HfpEventBody {
   loc?: string;
   stop?: number | null;
   route?: string;
-  occu?: number;
   ttarr?: string;
   ttdep?: string;
   sid?: number;
@@ -265,8 +264,6 @@ export interface HfpVehicleEvent {
   /** Stop id from the payload when present (about half of `vp` messages),
    * else null; callers fall back to the topic's next-stop level. */
   stopId: number | null;
-  /** Occupancy as reported; always 0 for trams (ADR-0002 amendment). */
-  occu: number | null;
   /** Timetable arrival/departure for the event's stop (stop events only). */
   ttarr: string | null;
   ttdep: string | null;
@@ -390,7 +387,6 @@ export function parseHfpEvent(
     odometer: num(body.odo),
     loc: str(body.loc),
     stopId: request(body.stop),
-    occu: num(body.occu),
     ttarr: str(body.ttarr),
     ttdep: str(body.ttdep),
     tlp,

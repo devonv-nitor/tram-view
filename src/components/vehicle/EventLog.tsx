@@ -4,8 +4,9 @@
  * The event log is the raw journey history the retained state keeps (bounded
  * to 200 entries) with the fields each event actually carried; the readout
  * lists every envelope field of the latest event, including the ones the
- * overview does not visualize (`occu`, `jrn`, `oday`, `loc`, ...), so nothing
- * in the message set is silently dropped.
+ * overview does not visualize (`jrn`, `oday`, `loc`, ...), so nothing in the
+ * message set is silently dropped. `occu` is the one exception: it is not
+ * parsed at all because the feed reports 0 for every tram (TV-0021).
  */
 import type { HfpVehicleEvent } from "../../lib/hfp.ts";
 import type { TelemetryEvent } from "../../lib/vehicleTelemetry.ts";
@@ -130,10 +131,10 @@ function isoOrDash(value: string | null): string {
   return value === null ? "—" : `${value} (${formatClock(value)})`;
 }
 
-/** Every field of the latest event, as the vehicle reported it. `occu` and
- * `drst` are shown as raw reported values on purpose: the feed reports
- * `occu 0` for every tram (so no occupancy visual may be derived from it), and
- * only bit 0 of `drst` is understood. */
+/** Every field of the latest event that this page models, as the vehicle
+ * reported it. `drst` is shown as a raw reported value on purpose (only bit 0
+ * is understood); `occu` is absent because the feed reports 0 for every tram,
+ * so it is not modelled at all (TV-0021, ADR-0002). */
 export function ReportedFields({
   event,
   topicFilter,
@@ -241,14 +242,6 @@ export function ReportedFields({
             event.stopId === null
               ? "null in this message (the topic's next-stop level applies)"
               : String(event.stopId)
-          }
-        />
-        <Field
-          label="occu (occupancy)"
-          value={
-            event.occu === null
-              ? "—"
-              : `${event.occu} as reported — never used for an occupancy reading`
           }
         />
         <Field

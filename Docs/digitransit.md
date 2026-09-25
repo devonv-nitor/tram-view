@@ -135,8 +135,11 @@ less). What the page shows, and the honesty limits on each reading:
   timetable time, so the estimate names the event and field it used. Nothing
   is shown when no stop event has announced a time.
 - **`occu`** is present but 0 for every tram (100% of 20,069 sampled
-  messages), so it is shown as a raw reported value only - no occupancy
-  visual.
+  messages on 2026-09-25, and re-measured for TV-0021: 22,882 `vp` messages
+  plus 9,435 messages across 13 event types, all 0), so it is not modelled or
+  shown at all - the overview has no occupancy card and the reported-fields
+  table has no `occu` row. The field's absence from the app is deliberate: see
+  the [ADR 0002 amendment](./ADR/0002-data-transport.md#verified-field-facts-2026-09-25).
 - **`drst`** appeared only as 0 or 1; only bit 0 (doors open) is interpreted,
   and the bits are printed as well as the interpretation.
 - **`tlr`/`tla`** are traffic-light-priority requests and their
