@@ -13,6 +13,14 @@
  *    when the displayed data actually changed, so consumers re-render only
  *    on real updates.
  *
+ * TV-0022: HSL publishes HFP route ids for real service runs that are not
+ * GTFS route ids (`1001H6` is a run of line 1H), so a route id that resolves
+ * to nothing takes the vehicle's line from the Routing API's own live-trip
+ * match instead - red only when the API reports no trip for the vehicle
+ * (Docs/ADR/0002-data-transport.md amendment). That map is fetched lazily,
+ * while some vehicle's route id does not resolve, and kept fresh on a
+ * bounded cadence (see ensureLiveTripsIfNeeded below).
+ *
  * The stream and the snapshot tick both pause while the tab is hidden: the
  * MQTT subscription is closed, so a hidden tab generates no API traffic
  * (the API-load balance from ADR-0002), and resumes when the tab becomes
@@ -20,7 +28,9 @@
  */
 import { useEffect, useRef, useState } from "react";
 import {
+  ensureLiveTramTrips,
   loadTramRouteIndex,
+  resolveLiveTramTrip,
   resolveTramShortName,
   type TramPosition,
 } from "../lib/digitransit.ts";
@@ -126,7 +136,36 @@ export function useTramPositions(): TramPositionsState {
     let stream: TramStreamHandle | null = null;
     let snapshotTimer: number | null = null;
 
+    /** TV-0022: the Routing API's live-trip match is the only other source of
+     * a line, and it is only ever needed when some vehicle's own route id does
+     * not resolve - so it is asked for only then. `ensureLiveTramTrips` is a
+     * no-op while the last attempt is fresh or one is in flight, so calling it
+     * from every snapshot means at most one request per
+     * `LIVE_TRAM_TRIPS_MAX_AGE_MS` and none at all while every route id
+     * resolves. A failure changes nothing on screen (those vehicles keep their
+     * red dot, which is exactly the TV-0011 state they were in) and is logged
+     * once per attempt. */
+    const ensureLiveTripsIfNeeded = () => {
+      const index = routeIndexRef.current;
+      if (index === null) return;
+      let unresolved = false;
+      for (const latest of latestPositionsRef.current.values()) {
+        if (resolveTramShortName(index, latest.routeId) === null) {
+          unresolved = true;
+          break;
+        }
+      }
+      if (!unresolved) return;
+      void ensureLiveTramTrips().catch((cause: unknown) => {
+        console.error(
+          "[tram-view] live tram trips failed:",
+          toError(cause).message,
+        );
+      });
+    };
+
     const takeSnapshot = () => {
+      ensureLiveTripsIfNeeded();
       setState((prev) => {
         const index = routeIndexRef.current;
         if (index === null) return prev;
@@ -139,16 +178,22 @@ export function useTramPositions(): TramPositionsState {
           }
         }
         const positions: TramPosition[] = [];
-        for (const latest of latestPositionsRef.current.values()) {
+        for (const [key, latest] of latestPositionsRef.current) {
           // TV-0011: a vehicle whose route resolves to no displayed tram line
           // (depot shunting/testing, absent routes like 1009TX) stays in the
           // snapshot with routeShortName null and renders out of service
           // (red dot, TV-0009 category color kept) instead of being dropped.
           // Vehicles whose latest position went stale are dropped above, so
           // TV-0005's disappearance behavior is unchanged.
+          // TV-0022: the line then comes from the Routing API's live-trip
+          // match for this vehicle (keyed by the same `vehicleKey` identity
+          // the snapshot map uses), and stays null - the red dot - when the
+          // API reports no live trip for it.
           positions.push({
             ...latest,
-            routeShortName: resolveTramShortName(index, latest.routeId),
+            routeShortName:
+              resolveTramShortName(index, latest.routeId) ??
+              resolveLiveTramTrip(key).routeShortName,
           });
         }
         const connected = connectedRef.current;

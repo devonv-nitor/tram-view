@@ -418,3 +418,146 @@ constraints on what the overview may claim, not implementation choices:
   variable-length tail, or per-event fields), or if HSL starts populating
   `occu` (it may then be modelled again - TV-0021) or publishes stop sequences
   on the MQTT side.
+
+## Amendment: a red-dot tram's line, from the Routing API's live trip (TV-0022)
+
+**Status: Accepted** (user decision 2026-09-25: "yes implement option a,
+document, then merge and push").
+
+### Defect
+
+TV-0011's red-dot rule is stricter than the data warrants. It asks one
+question - is `HSL:<the HFP route id>` one of the indexed tram route ids - and
+HSL publishes **variant-suffixed HFP route ids for real service runs**, which
+are absent from the whole 515-route GTFS route list, not just from the 31
+tram lines. Measured live 2026-09-25 21:45-22:10 (`/hfp/v2/journey/ongoing/vp/tram/#`):
+82 live trams, **10 red (12%)**, in four families - `1007 9` x3 (`desi` "7",
+the raw id contains a literal space), `1001H6`/`1001H5` x4 (`desi` "1H"),
+`100HA3`/`100HA5` x3 (`desi` "H") and `1009TX` (seen earlier) - while the same
+vehicles show the expected line green whenever they publish the unsuffixed id
+(`1007`, `1001H`). The same defect empties the vehicle overview page for those
+vehicles: `route(id: "HSL:1001H6")` returns 0 patterns against 6 for
+`HSL:1001H`.
+
+### Options
+
+- **A (chosen) - the Routing API's own live-trip match.** The API already
+  matches HFP identities to trips (TV-0020 uses that for the pattern choice).
+  Restrict the query to the index's own route ids, so every match resolves to
+  a displayed line by construction: one query per session, refreshed at most
+  once per 60 s while an unresolved vehicle is present. A vehicle stays red
+  only when the API reports no live trip for it.
+- **B - keep the rule, document it.** Rejected: it keeps a known-wrong,
+  user-visible state (a tram in service with a valid display line painted as
+  out of service) and leaves the overview page empty for those vehicles.
+- **C - derive the line from `desi` or the id's shape, no request.** Rejected:
+  `desi` is display text that is also populated on depot runs, so this would
+  paint the three Ruskeasuo depot runs as in-service "H" and the `1009TX` test
+  run as line "9", i.e. it invents service that does not exist. The status quo
+  is the adversarial input for this option: the two cases look identical from
+  the vehicle's own fields.
+
+### Decision
+
+Line resolution order is exactly, in this order, and no other input decides a
+line (not `desi`, not the route-id string's shape, not the HFP `line` field,
+not `dir`):
+
+1. `resolveTramShortName(index, routeId)` - unchanged TV-0011;
+2. else the live-trip match's route, resolved through the same index;
+3. else `null` - the red dot.
+
+- The map is `vehicleKey` (`"40/461"`, the `HSL:` prefix stripped - the app's
+  own identity form) -> route `gtfsId`, held in the same per-session cache
+  module as the route index, and asked for **only** when the index cannot
+  resolve a route id.
+- The map page keeps it fresh while any snapshot vehicle is unresolved: at
+  most one request in flight and at most one request per 60 s per session,
+  and none while the tab is hidden (the existing pause rule).
+- A failed fetch changes nothing user-visible (the previous map stays, the
+  vehicle stays red), is logged once with its reason, and stays retryable: a
+  failure does not become a permanent cache entry. The throttle is driven by
+  the attempt timestamp, so a failure retries on the same 60 s cadence.
+- The vehicle overview page uses the same match for both the displayed line
+  and its pattern query: when the raw route id resolves to no line, the
+  matched route id is what `loadRoutePatterns` asks about, and the page names
+  the route it actually queried. A vehicle with no match still queries its raw
+  route id, which keeps today's honest "the Routing API returned no trip
+  patterns for route ..." note.
+- TV-0020's pattern *selection* is untouched: a matched route's patterns
+  resolve through the same `vehiclePositions` live-trip match.
+
+### Measured query facts (2026-09-25)
+
+```
+query { routes(ids: ["HSL:1001", ..., "HSL:2015"]) { gtfsId
+  patterns { vehiclePositions { vehicleId } } } }
+```
+
+- The 31 indexed tram route ids as `ids`: HTTP 200, **6.8-7.2 KB, 52-63 ms**,
+  78-79 vehicles matched, **0** vehicles claimed by two routes; request body
+  524-593 bytes. Refreshed once per 60 s while unresolved vehicles are
+  present, so the map page's keyed API load stays at ~1 request/min beyond the
+  one per-session route index.
+- The unfiltered form (`routes { patterns { vehiclePositions { vehicleId } } }`)
+  is 78.3 KB / 515 routes, so the indexed-id form is the cheap one. `routes`
+  has no `mode` argument (GraphQL rejects it).
+- `vehiclePositions { vehicleId }` is the HFP identity as
+  `HSL:<operator>/<vehicle>` (unpadded) - the form TV-0020 already uses.
+- The 31-route index includes `HSL:1001H` ("1H"), `HSL:100H` ("H"),
+  `HSL:1007` ("7") and `HSL:1010B` ("10B"), so requesting only the index's own
+  keys guarantees a match resolves to a displayed line.
+- Classification over 120 s of the live stream: 78 vehicles, red **13 (16.7%)
+  -> 5 (6.4%)**, 8 recovered (4x `1007 9` -> `HSL:1007`, `1001H6` ->
+  `HSL:1001H`, and one `1007 9` matched to `HSL:1009`); the 5 that stayed red
+  were Ruskeasuo depot runs (`100HA3`/`100HA5`) the API has no trip for. In an
+  earlier window the same measurement was 82 vehicles, 10 red (12%) -> 3.
+  Which vehicles are in the depot families changes between windows; the
+  families themselves are stable.
+- Browser evidence (headless Chrome + CDP, one popup opened per live marker):
+  75 markers, **3 red, every one of them with the API reporting no live trip**,
+  the marker's red-dot class agreeing with its popup row, and the reported
+  vehicle `40/461` (raw `1001H6` -> `HSL:1001H`) showing line `1H`. Its
+  vehicle page renders "Stops on this line - 16 stops · 13 passed" with no
+  "no trip patterns" note.
+- Failure path: an invalid key rejects with `MissingApiKeyError` (HTTP 401),
+  the failure is not cached (the next call with the real key succeeds), and
+  resolving a vehicle while the lookup is unavailable answers "not fetched"
+  instead of throwing. Telemetry is unaffected - the browser probes' console
+  had no uncaught error.
+
+### What a red dot now asserts, and its limits
+
+A red dot asserts: *this vehicle's HFP route id is not a GTFS route id **and**
+the Routing API reports no live tram trip for it*. Its limits, all visible in
+the data rather than hidden:
+
+- The match is a point-in-time snapshot refreshed at most once per 60 s, so a
+  vehicle that starts a trip while the page is open can stay red for up to one
+  refresh, and a vehicle that ends one can stay green for up to one refresh.
+  The popup prints the map's age.
+- When the two sources disagree, the **live-trip match decides**, because the
+  vehicle's own id is by construction not a GTFS route id in the only case
+  where the match is consulted at all. Two such disagreements were observed
+  and are the reason the popup shows both inputs: `40/419` published `1007 9`
+  (`desi` "7") while the API had it on `HSL:1009` (line 9), and `40/406`
+  published `100HA3` (a depot run, `desi` "H") while the API still had it on
+  `HSL:1001H` - a run that finished inside the refresh interval.
+- The position snapshot and the live-trip map can land in the same second, in
+  which case that one snapshot is still red; the popup names this state
+  explicitly ("the snapshot did not use" the match, "unexpected") rather than
+  presenting it as normal. It lasted one snapshot in the 75-marker probe.
+
+### Consequences
+
+- The map page's keyed API load is unchanged in shape (one per-session route
+  index) and gains at most one query per 60 s, only while an unresolved
+  vehicle exists; the map page still issues no per-route pattern query.
+- The overview page's spine now renders for vehicles whose HFP route id has no
+  GTFS route entry, naming the route it queried.
+- Revisit this amendment if HSL starts publishing GTFS route ids for these
+  service runs (the fallback would then never fire - the query is already
+  conditional), if the Routing API's `routes(ids:)` cost or matching
+  behaviour changes, or if the red share stops falling materially (measured
+  before: 12-17%, after: 4-6%, and every remaining red was a vehicle the API
+  had no trip for).

@@ -1,6 +1,8 @@
 /**
  * Debug readout for the marker click popup (TV-0016): every input to the
- * red-dot decision, phrased from the same state the render path consumes.
+ * red-dot decision, phrased from the same state the render path consumes -
+ * including the Routing API's live-trip match (TV-0022), which is what
+ * labels a vehicle whose HFP route id is not a GTFS route id.
  * Presentation/diagnostic only - nothing here mutates the snapshot state,
  * and the rendering logic (offline flag, marker classes, legend) never
  * consults this module. Content is rebuilt from the current position on
@@ -8,11 +10,15 @@
  */
 import { POSITION_STALENESS_MS } from "../hooks/useTramPositions.ts";
 import {
+  LIVE_TRAM_TRIPS_MAX_AGE_MS,
+  resolveLiveTramTrip,
   resolveTramRouteDebug,
+  type LiveTramTripMatch,
   type TramPosition,
   type TramRouteResolution,
 } from "../lib/digitransit.ts";
 import { isSparakoffBarTram, tramCategoryInfo } from "../lib/fleet.ts";
+import { vehicleKey } from "../lib/hfp.ts";
 import { vehicleOverviewHash } from "../lib/route.ts";
 
 /** Escapes one string for safe interpolation into the popup's innerHTML
@@ -79,14 +85,68 @@ function reasonText(resolution: TramRouteResolution): string {
   }
 }
 
+/** The live-trip rows (TV-0022): the Routing API's own HFP-to-route match,
+ * which is what labels a vehicle whose HFP route id is not a GTFS route id
+ * (e.g. `1001H6`, a run of line 1H). The readout distinguishes the four
+ * states the verdict below depends on: not consulted (the raw route id
+ * resolved in the index), matched, no live trip reported for this vehicle,
+ * and lookup unavailable (no successful fetch, with the failure reason). The
+ * map's age and its last failure are shown because the answer is a
+ * point-in-time snapshot, refreshed at most once a minute. */
+function liveTripRows(
+  resolution: TramRouteResolution | null,
+  liveTrip: LiveTramTripMatch,
+): string {
+  const label = `Live trip match (${liveTrip.vehicleKey})`;
+  if (resolution !== null && resolution.inTramLineIndex) {
+    return row(
+      label,
+      "not consulted - the raw HFP route id resolves in the GTFS line index",
+    );
+  }
+  const ageSeconds =
+    liveTrip.fetchedAt === null
+      ? null
+      : Math.max(0, Math.round((Date.now() - liveTrip.fetchedAt) / 1000));
+  const mapAge =
+    ageSeconds === null
+      ? "no successful fetch yet"
+      : `fetched ${ageSeconds} s ago`;
+  const map = row(
+    "Live-trip map",
+    `${mapAge} - one query for the live tram fleet when a route id does not resolve, refreshed at most every ${Math.round(LIVE_TRAM_TRIPS_MAX_AGE_MS / 1000)} s` +
+      (liveTrip.error === null
+        ? ""
+        : `; the last attempt failed: ${liveTrip.error.message}`),
+  );
+  if (liveTrip.routeGtfsId === null) {
+    return (
+      row(
+        label,
+        ageSeconds === null
+          ? `unavailable - the live-trip lookup has not succeeded (${liveTrip.error?.message ?? "reason unknown"})`
+          : "none - the Routing API reports no live trip for this vehicle",
+      ) + map
+    );
+  }
+  return (
+    row(
+      label,
+      `${liveTrip.routeGtfsId} -> route ${liveTrip.routeId ?? "?"} -> line ${liveTrip.routeShortName ?? "?"}`,
+    ) + map
+  );
+}
+
 /** The render-decision summary line (the task's phrasing, e.g. "red dot:
  * route 1009TX is not in the GTFS line index"): why the marker shows the
  * red not-in-service dot or not, derived from the same inputs the marker
- * classes use - the resolved line, the SpåraKoff special case, and the
- * route resolution for the reason. */
+ * classes use - the resolved line, the SpåraKoff special case, the route
+ * resolution for the reason, and the live-trip match (TV-0022) that decides
+ * the case where the raw route id is not a GTFS route id. */
 function summaryText(
   position: TramPosition,
   resolution: TramRouteResolution | null,
+  liveTrip: LiveTramTripMatch,
 ): { text: string; offline: boolean } {
   const offline =
     position.routeShortName === null && !isSparakoffBarTram(position);
@@ -98,7 +158,10 @@ function summaryText(
   }
   if (!offline) {
     return {
-      text: `Line dot: route ${position.routeId} is in the GTFS line index and resolves to line ${position.routeShortName}`,
+      text:
+        resolution !== null && resolution.inTramLineIndex
+          ? `Line dot: route ${position.routeId} is in the GTFS line index and resolves to line ${position.routeShortName}`
+          : `Line dot: route ${position.routeId} is not a GTFS route id, but the Routing API's live-trip match reports this vehicle on route ${liveTrip.routeId ?? liveTrip.routeGtfsId ?? "?"} (line ${position.routeShortName})`,
       offline,
     };
   }
@@ -116,8 +179,20 @@ function summaryText(
       offline,
     };
   }
+  if (liveTrip.routeShortName !== null) {
+    // Defensive for the same reason: the snapshot resolves a matched vehicle
+    // to that line, so a red dot with a match means the two disagree.
+    return {
+      text: `Red dot: route ${position.routeId} is not a GTFS route id and the Routing API's live-trip match reports route ${liveTrip.routeId ?? "?"} (line ${liveTrip.routeShortName}), which the snapshot did not use (unexpected)`,
+      offline,
+    };
+  }
   return {
-    text: `Red dot: route ${position.routeId} is not in the GTFS line index (${reasonText(resolution)})`,
+    text:
+      `Red dot: route ${position.routeId} is not a GTFS route id and the Routing API reports no live trip for this vehicle (${reasonText(resolution)})` +
+      (liveTrip.fetchedAt === null
+        ? `; the live-trip lookup is unavailable (${liveTrip.error?.message ?? "reason unknown"})`
+        : ""),
     offline,
   };
 }
@@ -133,7 +208,8 @@ export function buildTramDebugHtml(position: TramPosition): string {
   const barTram = isSparakoffBarTram(position);
   const info = tramCategoryInfo(position.vehicleNumber);
   const resolution = resolveTramRouteDebug(position.routeId);
-  const summary = summaryText(position, resolution);
+  const liveTrip = resolveLiveTramTrip(vehicleKey(position));
+  const summary = summaryText(position, resolution, liveTrip);
   const ageSeconds = Math.max(
     0,
     Math.round((Date.now() - position.receivedAt) / 1000),
@@ -225,6 +301,7 @@ export function buildTramDebugHtml(position: TramPosition): string {
     ) +
     fleet +
     route +
+    liveTripRows(resolution, liveTrip) +
     row(
       "Line shown (snapshot)",
       position.routeShortName === null

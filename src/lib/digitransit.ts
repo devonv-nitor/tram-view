@@ -315,6 +315,188 @@ export function resolveTramRouteDebug(
 }
 
 /**
+ * TV-0022: HSL publishes HFP route ids for real service runs that are not
+ * GTFS route ids - `1001H6` is a run of line 1H, whose GTFS route id is
+ * `HSL:1001H`, and `1007 9` is a run of line 7, `HSL:1007` - so the TV-0011
+ * rule (`HSL:<HFP route id>` is not one of the indexed tram route ids -> red
+ * dot) marked trams in service as out of service: 10 of 82 live vehicles on
+ * 2026-09-25, 7 of them falsely, and it emptied the overview's stop sequence
+ * for them (`route(id: "HSL:1001H6")` returns 0 patterns, `HSL:1001H` 6).
+ * The Routing API matches HFP to trips itself, so one query for the whole
+ * fleet - asked only for the indexed tram routes - gives the route each live
+ * vehicle is running. A vehicle whose own route id does not resolve takes its
+ * line from that match, and is red only when the API reports no trip for it.
+ * Decision, options and measurements: Docs/ADR/0002-data-transport.md
+ * amendment.
+ */
+const LIVE_TRAM_TRIPS_QUERY = (routeGtfsIds: string[]) => `
+  query LiveTramTrips {
+    routes(ids: ${JSON.stringify(routeGtfsIds)}) {
+      gtfsId
+      patterns {
+        vehiclePositions {
+          vehicleId
+        }
+      }
+    }
+  }
+`;
+
+interface LiveTramTripsData {
+  routes: {
+    gtfsId: string;
+    patterns: { vehiclePositions: { vehicleId: string }[] }[];
+  }[];
+}
+
+/** How long a fetched live-trip map is used before a caller that needs it
+ * fetches a new one (TV-0022). A vehicle that starts its trip later must be
+ * able to lose its red dot without a page reload, and a failed attempt is
+ * retried on the same cadence instead of once per snapshot tick. */
+export const LIVE_TRAM_TRIPS_MAX_AGE_MS = 60_000;
+
+/** Per-session state of the live-trip lookup (TV-0022). `routeByVehicle` is
+ * the last successful map, `attemptedAt` the last attempt of any outcome (so
+ * a failure throttles like a success), and `error` the last failure - kept
+ * for the popup's debug readout, never used to decide a rendering. */
+interface LiveTramTripsState {
+  /** The app's own vehicle identity (`vehicleKey`, e.g. "40/461"; the API's
+   * `HSL:` prefix is stripped) -> the route gtfsId the API reports the
+   * vehicle on. Null until the first successful fetch. */
+  routeByVehicle: Map<string, string> | null;
+  fetchedAt: number | null;
+  attemptedAt: number;
+  error: Error | null;
+}
+
+const liveTramTrips: LiveTramTripsState = {
+  routeByVehicle: null,
+  fetchedAt: null,
+  attemptedAt: 0,
+  error: null,
+};
+let liveTramTripsInFlight: Promise<void> | null = null;
+
+/** The Routing API's `vehiclePositions.vehicleId` (`HSL:40/461`) in the app's
+ * own vehicle identity form (`vehicleKey`: `40/461`), so the live-trip map is
+ * keyed exactly like the position snapshot it labels. */
+function vehicleKeyFromApiId(vehicleId: string): string {
+  return vehicleId.startsWith("HSL:") ? vehicleId.slice(4) : vehicleId;
+}
+
+/**
+ * Fetches the live-trip map on first use and re-fetches it only when the last
+ * attempt is older than LIVE_TRAM_TRIPS_MAX_AGE_MS, so a caller may call this
+ * on every snapshot: at most one request is in flight, at most one attempt
+ * per window, and a session whose vehicles all resolve from the route index
+ * never needs a request at all. The fetch never throws synchronously - a
+ * missing or rejected key rejects like any other request failure - and the
+ * previous map is kept on failure, so a caller can simply `catch` and leave
+ * its rendering unchanged (TV-0022 requirement 3).
+ */
+export function ensureLiveTramTrips(apiKey?: string): Promise<void> {
+  if (Date.now() - liveTramTrips.attemptedAt <= LIVE_TRAM_TRIPS_MAX_AGE_MS) {
+    return Promise.resolve();
+  }
+  if (liveTramTripsInFlight !== null) return liveTramTripsInFlight;
+  liveTramTrips.attemptedAt = Date.now();
+  const inFlight = fetchLiveTramTrips(apiKey);
+  liveTramTripsInFlight = inFlight;
+  const clear = () => {
+    if (liveTramTripsInFlight === inFlight) liveTramTripsInFlight = null;
+  };
+  inFlight.then(clear, clear);
+  return inFlight;
+}
+
+async function fetchLiveTramTrips(apiKey: string | undefined): Promise<void> {
+  try {
+    // The indexed tram routes are exactly the routes a vehicle may be labelled
+    // with, so the query asks for those and nothing else (78.3 KB for the
+    // unfiltered `routes` form against 6.8 KB for this one, 2026-09-25).
+    const index = await loadTramRouteIndex(apiKey);
+    const routes =
+      index.size === 0
+        ? []
+        : (
+            await graphQlRequest<LiveTramTripsData>(
+              LIVE_TRAM_TRIPS_QUERY([...index.keys()]),
+              apiKey ?? getDigitransitApiKey(),
+            )
+          ).routes;
+    const routeByVehicle = new Map<string, string>();
+    for (const route of routes) {
+      for (const pattern of route.patterns) {
+        for (const position of pattern.vehiclePositions) {
+          // Live-measured 2026-09-25: no vehicle is claimed by two routes
+          // (78-79 matched of ~82 live, 0 overlaps). If the API ever reports
+          // one twice, the first route in the response wins instead of the
+          // last overwriting it, so the map stays a join, not a race.
+          const key = vehicleKeyFromApiId(position.vehicleId);
+          if (!routeByVehicle.has(key)) routeByVehicle.set(key, route.gtfsId);
+        }
+      }
+    }
+    liveTramTrips.routeByVehicle = routeByVehicle;
+    liveTramTrips.fetchedAt = Date.now();
+    liveTramTrips.error = null;
+  } catch (cause) {
+    const error = cause instanceof Error ? cause : new Error(String(cause));
+    liveTramTrips.error = error;
+    throw error;
+  }
+}
+
+/** One vehicle's live-trip answer (TV-0022): everything the render path, the
+ * overview's pattern query and the marker popup's debug readout need, read
+ * from the per-session state above with no request. */
+export interface LiveTramTripMatch {
+  /** The vehicle identity asked about (the app's `vehicleKey`, "40/461"). */
+  vehicleKey: string;
+  /** The route gtfsId the Routing API reports this vehicle on, or null when
+   * the API reports no live trip for it. */
+  routeGtfsId: string | null;
+  /** That route's id in HFP form (no `HSL:` prefix) - the form
+   * `resolveTramShortName` and `loadRoutePatterns` take - or null. */
+  routeId: string | null;
+  /** The displayed line for the matched route, resolved through the same
+   * per-session tram-line index the render path uses (the query asks only for
+   * indexed routes, so a match always resolves); null when there is no
+   * match. */
+  routeShortName: string | null;
+  /** When the live-trip map this answer comes from was fetched; null when no
+   * fetch has succeeded yet. */
+  fetchedAt: number | null;
+  /** The last fetch failure, or null. Diagnostic only. */
+  error: Error | null;
+}
+
+/** Resolves one vehicle against the live-trip map (TV-0022): the line the map
+ * page shows for a route id the index cannot resolve, the route the overview
+ * asks for patterns, and the popup's readout. Reads module state only - the
+ * fetch is `ensureLiveTramTrips`, called by the hooks that need it. */
+export function resolveLiveTramTrip(vehicleKey: string): LiveTramTripMatch {
+  const routeGtfsId = liveTramTrips.routeByVehicle?.get(vehicleKey) ?? null;
+  const routeId =
+    routeGtfsId === null
+      ? null
+      : routeGtfsId.startsWith("HSL:")
+        ? routeGtfsId.slice(4)
+        : routeGtfsId;
+  return {
+    vehicleKey,
+    routeGtfsId,
+    routeId,
+    routeShortName:
+      routeGtfsId === null
+        ? null
+        : (tramLineIndexForDebug?.get(routeGtfsId) ?? null),
+    fetchedAt: liveTramTrips.fetchedAt,
+    error: liveTramTrips.error,
+  };
+}
+
+/**
  * TV-0017/TV-0020: the trip-pattern query behind the vehicle overview's
  * journey spine (ADR-0002 amendment). One query per **route** per session:
  * the pattern gives the ordered stop names with their coordinates, and

@@ -221,6 +221,9 @@ function PinnedSummary({
 
 function PatternNote({ view }: { view: VehicleTelemetryView }) {
   if (view.patternStatus === "ready") return null;
+  // TV-0022: name the route the query actually asked about (the vehicle's own
+  // route id, or the live-trip match when that id is not a GTFS route id).
+  const route = view.patternRouteId ?? "?";
   const text =
     view.patternStatus === "idle"
       ? "Waiting for the vehicle's route before asking the Routing API for this line's stop sequence."
@@ -228,8 +231,8 @@ function PatternNote({ view }: { view: VehicleTelemetryView }) {
         ? "Loading this line's stop sequences from the keyed Routing API query…"
         : view.patternStatus === "missing"
           ? view.patternSelection.missReason === "no-pattern-for-direction"
-            ? `The Routing API returned no pattern of route ${view.retained.telemetry?.routeId ?? "?"} in the direction this vehicle reports, so the stop sequence cannot be shown. Telemetry is unaffected.`
-            : `The Routing API returned no trip patterns for route ${view.retained.telemetry?.routeId ?? "?"}, so the stop sequence cannot be shown. Telemetry is unaffected.`
+            ? `The Routing API returned no pattern of route ${route} in the direction this vehicle reports, so the stop sequence cannot be shown. Telemetry is unaffected.`
+            : `The Routing API returned no trip patterns for route ${route}, so the stop sequence cannot be shown. Telemetry is unaffected.`
           : `The stop-sequence query failed (${view.patternError?.message ?? "unknown error"}). Telemetry is unaffected.`;
   return (
     <section className="card" aria-label="Stop sequence">

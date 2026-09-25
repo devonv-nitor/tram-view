@@ -14,6 +14,7 @@ polling) is recorded in
 | Tram line metadata (route id -> short name, mode) | Routing API v2 GraphQL, `POST https://api.digitransit.fi/routing/v2/hsl/gtfs/v1`, query `routes { gtfsId shortName mode }`, fetched once per session and cached | required |
 | One vehicle's full HFP event stream (position, stop events, doors, traffic-light priority) | same MQTT broker, filter `/hfp/v2/journey/ongoing/+/tram/<oper>/<veh>/#` - one vehicle, every event type (TV-0017) | not needed |
 | One line's stop sequences | Routing API v2 GraphQL, query `route(id: "HSL:<routeId>") { patterns { directionId headsign stops { gtfsId name lat lon } vehiclePositions { vehicleId } } }`, once per route per session and cached; which pattern is shown is chosen per vehicle from the API's own live-trip match (TV-0017, TV-0020) | required |
+| The line of a vehicle whose HFP route id is not a GTFS route id | Routing API v2 GraphQL, query `routes(ids: [<the indexed tram route ids>]) { gtfsId patterns { vehiclePositions { vehicleId } } }`, fetched only while such a vehicle is present and refreshed at most once per 60 s (TV-0022) | required |
 
 The positions subscription is anonymous. The line-metadata query and the
 basemap tiles require a digitransit subscription key; without one the app
@@ -21,16 +22,29 @@ shows a clear error instead of silently hiding data or silently switching to a
 different map style: the line numbers cannot be resolved without the metadata,
 and the map renders no basemap layer at all (TV-0018 - no key-free fallback).
 
-Out-of-service trams (TV-0011): a vehicle whose latest position resolves to
-no displayed GTFS tram line - depot shunting, training/testing, or an absent
-route such as `1009TX` - is kept in the snapshot with `routeShortName: null`
-instead of being dropped, and renders as its normal category-colored marker
-with the line number replaced by a red dot (`--tram-type-offline`). The
-distinguishing signal is exactly that route resolution, not the `desi` field
-or the route-id string; dedup stays latest-position-per-vehicle, so a vehicle
-that reports under both a service route and an out-of-service route shows
-whichever event arrived last, and vehicles that stop publishing still
-disappear after the staleness cutoff.
+Out-of-service trams (TV-0011, TV-0022): a vehicle's line is resolved in
+this order and by nothing else - (1) its latest position's HFP route id
+resolved through the per-session tram-line index, (2) else the Routing API's
+live-trip match for that vehicle, resolved through the same index, (3) else
+no line. A vehicle with no line is kept in the snapshot with
+`routeShortName: null` instead of being dropped, and renders as its normal
+category-colored marker with the line number replaced by a red dot
+(`--tram-type-offline`). Step 2 exists because HSL publishes
+variant-suffixed HFP route ids for real service runs (`1001H6` is a run of
+line 1H, `1007 9` a run of line 7); those ids are absent from the whole GTFS
+route list, so step 1 alone painted 12-17% of the live fleet as out of
+service (the 2026-09-25 measurement and the full decision are in the
+[ADR 0002 amendment](./ADR/0002-data-transport.md#amendment-a-red-dot-trams-line-from-the-routing-apis-live-trip-tv-0022)).
+A red dot therefore asserts that the route id is not a GTFS route id **and**
+that the API reports no live trip for that vehicle - the honest reading for
+depot shunting, training/testing and a test route such as `1009TX`. The
+resolution never uses `desi`, the route-id string's shape, the HFP `line`
+field or `dir`, and the live-trip match is a snapshot refreshed at most once
+per 60 s, so a vehicle entering service can stay red for up to one refresh.
+Dedup stays latest-position-per-vehicle, so a vehicle that reports under both
+a service route and an out-of-service route shows whichever event arrived
+last, and vehicles that stop publishing still disappear after the staleness
+cutoff.
 
 Special case (TV-0013): HSL car #175 - the SpåraKoff bar tram - is detected
 by identity, `operatorId === 40 && vehicleNumber === 175` on the latest
@@ -47,7 +61,10 @@ filtered tram-line index (`src/lib/digitransit.ts`). The rendering logic
 never consults it; `resolveTramRouteDebug()` uses it - no extra request - so
 the marker popup can tell the index's conflated null-reasons apart: route
 absent from the GTFS route list, not TRAM mode, TRAM route without a GTFS
-shortName, or a shortName failing the tram-line criteria.
+shortName, or a shortName failing the tram-line criteria. The popup's
+live-trip rows (TV-0022) are the second half of the same readout: they show
+whether that fallback was consulted, what it answered (matched route and
+line, no live trip, or the failure reason) and how old its map is.
 
 ## API key setup
 
@@ -167,6 +184,17 @@ less). What the page shows, and the honesty limits on each reading:
   `directionId` did not contain the reported next stop for 16.5% of live
   vehicles
   ([ADR 0002 amendment](./ADR/0002-data-transport.md#additional-keyed-graphql-query)).
+- **Which route the page asks about, and which line it shows (TV-0022).** The
+  page applies the map's two-step resolution (see the out-of-service paragraph
+  above): the reported route id first, else the Routing API's live-trip match.
+  When that match is what labels the vehicle, the **matched** route id is what
+  the pattern query asks about, so a vehicle whose HFP route id has no GTFS
+  route entry (e.g. `1001H6`) renders its stop sequence instead of the "no trip
+  patterns" note; the note always names the route that was queried, and a
+  vehicle with no match still queries its reported route id. While that
+  vehicle is unresolved the page keeps the match fresh on the map's cadence
+  (at most one request per 60 s, none while the tab is hidden); a vehicle whose
+  route id resolves in the index issues no such request at all.
 
 Positions and line metadata are produced by `src/lib/hfp.ts` and
 `src/lib/digitransit.ts`, and surfaced to UI code as `TramPosition` objects
@@ -204,7 +232,11 @@ for car #175), the full route resolution (raw HFP `routeId`, the `HSL:`
 GTFS key, membership in the tram-line index, the GTFS shortName, whether it
 passes `isTramLineShortName`, and the distinct null-reason when absent -
 route absent from GTFS / not TRAM mode / no GTFS shortName / shortName
-failing the line criteria), the line the snapshot actually shows, the
+failing the line criteria), the live-trip input (whether it was consulted
+at all - it is not, when the raw route id resolves in the index - and, when
+it was, the matched `gtfsId`, route and line, or "no live trip" for this
+vehicle, or the lookup's failure reason, always with the age of the
+live-trip map), the line the snapshot actually shows, the
 computed offline boolean, a one-line red-dot verdict, and freshness
 (`receivedAt`, its age in seconds, and the staleness budget). The readout
 refreshes with every snapshot while open and closes by itself when the

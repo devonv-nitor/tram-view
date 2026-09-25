@@ -17,11 +17,22 @@
  * Where it differs is on purpose: the map drops a stale vehicle, this page
  * keeps showing the last known values and marks them stale, because the user
  * picked this vehicle explicitly.
+ *
+ * TV-0022: HSL publishes HFP route ids for real service runs that are not
+ * GTFS route ids (`1001H6` is a run of line 1H, whose GTFS route id is
+ * `HSL:1001H`), and `route(id: "HSL:1001H6")` returns no patterns at all. The
+ * page therefore resolves the line and the route whose patterns it asks for
+ * the same way the map does: the route index first, then the Routing API's
+ * own live-trip match for this vehicle (Docs/ADR/0002-data-transport.md
+ * amendment).
  */
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
+  ensureLiveTramTrips,
+  LIVE_TRAM_TRIPS_MAX_AGE_MS,
   loadTramRouteIndex,
   loadRoutePatterns,
+  resolveLiveTramTrip,
   resolveTramShortName,
   type TripPattern,
 } from "../lib/digitransit.ts";
@@ -32,6 +43,7 @@ import {
 } from "../lib/journey.ts";
 import {
   subscribeVehicleEvents,
+  vehicleKey,
   vehicleTopicFilter,
   type HfpVehicleEvent,
   type TramStreamHandle,
@@ -81,10 +93,16 @@ export interface VehicleTelemetryView {
   duplicateCount: number;
   unknownEventCount: number;
   /** The line short name the map page would show, or null for a vehicle whose
-   * route resolves to no displayed tram line (out of service, TV-0011). */
+   * route resolves to no displayed tram line: not a GTFS route id and no live
+   * trip reported for it (TV-0011, TV-0022). */
   routeShortName: string | null;
   /** False until the per-session line index has loaded. */
   routeIndexLoaded: boolean;
+  /** TV-0022: the route id the pattern query asked about - the vehicle's own
+   * route id, or the live-trip match when that id is not a GTFS route id. The
+   * notes name this route, never one that was not queried. Null until the
+   * vehicle reports a route. */
+  patternRouteId: string | null;
   pattern: TripPattern | null;
   patternStatus: PatternStatus;
   patternError: Error | null;
@@ -230,34 +248,83 @@ export function useVehicleTelemetry(
     };
   }, [operatorId, vehicleNumber]);
 
-  // The spine's stop sequence: one query per route per session, issued as
-  // soon as the stream tells us which route this journey is on (and again if
-  // the vehicle changes line). A failure never blocks the telemetry - it is
-  // shown as an unavailable stop sequence.
+  // TV-0011/TV-0022: the route id the vehicle reports, the line the index
+  // resolves it to (null when the id is not a GTFS route id), and - only in
+  // that case - the Routing API's own live-trip match for this vehicle. The
+  // spine's stop sequence: one query per route per session, issued as soon as
+  // the stream tells us which route this journey is on (and again if the
+  // vehicle changes line or the live-trip match moves it to another route).
+  // A failure never blocks the telemetry - it is shown as an unavailable stop
+  // sequence.
+  //
+  // The live-trip answer is module state read at render time, not React state:
+  // this page re-renders on its 1 s snapshot tick, so a fetched or refreshed
+  // map lands within a second. Reading it costs no request; the fetch is the
+  // effect below.
   const routeId = retained.telemetry?.routeId ?? null;
+  const indexedShortName =
+    routeIndex === null || routeId === null
+      ? null
+      : resolveTramShortName(routeIndex, routeId);
+  const liveTrip = resolveLiveTramTrip(
+    vehicleKey({ operatorId, vehicleNumber }),
+  );
+  const lineShortName = indexedShortName ?? liveTrip.routeShortName;
+  const patternRouteId =
+    indexedShortName !== null ? routeId : (liveTrip.routeId ?? routeId);
+
   useEffect(() => {
-    if (routeId === null) return;
+    if (patternRouteId === null) return;
     let cancelled = false;
-    loadRoutePatterns(routeId)
+    loadRoutePatterns(patternRouteId)
       .then((patterns) => {
         if (cancelled) return;
-        setPatternResult({ routeId, patterns, error: null });
+        setPatternResult({ routeId: patternRouteId, patterns, error: null });
       })
       .catch((cause: unknown) => {
         if (cancelled) return;
         const failure = toError(cause);
         console.error("[tram-view] route patterns failed:", failure.message);
-        setPatternResult({ routeId, patterns: [], error: failure });
+        setPatternResult({
+          routeId: patternRouteId,
+          patterns: [],
+          error: failure,
+        });
       });
     return () => {
       cancelled = true;
     };
-  }, [routeId]);
+  }, [patternRouteId]);
+
+  // TV-0022: while this vehicle's own route id does not resolve, the live-trip
+  // match may still label it (and supply the route whose patterns the spine
+  // shows), so the map is fetched then and kept fresh on the same bounded
+  // cadence as the map page: `ensureLiveTramTrips` throttles internally, so
+  // the interval is only a wake-up and costs at most one request per
+  // LIVE_TRAM_TRIPS_MAX_AGE_MS. Nothing is fetched while the tab is hidden -
+  // the same API-load rule as the stream above.
+  const needsLiveTrip =
+    routeId !== null && routeIndex !== null && indexedShortName === null;
+  useEffect(() => {
+    if (!needsLiveTrip) return;
+    const ensure = () => {
+      if (document.visibilityState !== "visible") return;
+      void ensureLiveTramTrips().catch((cause: unknown) => {
+        console.error(
+          "[tram-view] live tram trips failed:",
+          toError(cause).message,
+        );
+      });
+    };
+    ensure();
+    const timer = window.setInterval(ensure, LIVE_TRAM_TRIPS_MAX_AGE_MS);
+    return () => window.clearInterval(timer);
+  }, [needsLiveTrip]);
 
   // Loading is the absence of a result for the current route; a result for a
   // previous route (the vehicle changed line) is not shown at all.
   const current =
-    patternResult !== null && patternResult.routeId === routeId
+    patternResult !== null && patternResult.routeId === patternRouteId
       ? patternResult
       : null;
   const patternError = current?.error ?? null;
@@ -284,7 +351,7 @@ export function useVehicleTelemetry(
   );
   const pattern = patternSelection.pattern;
   const patternStatus: PatternStatus =
-    routeId === null
+    patternRouteId === null
       ? "idle"
       : current === null
         ? "loading"
@@ -320,11 +387,9 @@ export function useVehicleTelemetry(
     duplicateCount: retained.duplicateCount,
     distinctCount: distinctMessageCount(retained),
     unknownEventCount: retained.unknownEventCount,
-    routeShortName:
-      routeIndex === null || telemetry === null
-        ? null
-        : resolveTramShortName(routeIndex, telemetry.routeId),
+    routeShortName: lineShortName,
     routeIndexLoaded: routeIndex !== null,
+    patternRouteId,
     pattern,
     patternStatus,
     patternError,

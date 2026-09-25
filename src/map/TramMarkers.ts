@@ -6,8 +6,12 @@
  * its point faces the vehicle's reported heading, and carrying a native
  * `title` tooltip with the full model name. A vehicle whose latest position
  * resolves to no displayed tram line (TV-0011: depot shunting/testing,
- * absent routes) keeps the category-colored body and heading rotation and
- * shows a red not-in-service dot in place of the line number.
+ * absent routes; TV-0022: an HFP route id that is not a GTFS route id *and*
+ * no live trip reported for the vehicle - so a variant-suffixed id such as
+ * `1001H6` shows its line instead of a dot) keeps the category-colored body
+ * and heading rotation and shows a red not-in-service dot in place of the
+ * line number. The marker layer consumes `routeShortName` only: which source
+ * resolved it is the hooks' and the popup's business, never this file's.
  * TV-0016: clicking/tapping a marker body opens a Leaflet popup bound to
  * the marker - it follows the tram, refreshes its debug readout (every
  * input to the red-dot decision) on every snapshot in the same per-marker
