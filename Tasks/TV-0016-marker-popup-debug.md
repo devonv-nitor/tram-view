@@ -1,6 +1,6 @@
 ---
 id: TV-0016
-status: READY
+status: IN_PROGRESS
 owner: agent
 gatekeeper: human
 required_approvals: []
@@ -93,3 +93,50 @@ live in the field.
 - The morning red-dot mystery may be an upstream data issue (e.g.
   feed route ids temporarily not matching GTFS); this task is purely
   the diagnostic tool — do not attempt to fix the discrepancy here.
+
+## Handoff
+
+Implemented on `bb/worker-tv-0016-marker-debug-popup-thr_q62yd7bcnm`
+(off `origin/main` aa69463).
+
+- **Files**: `src/lib/digitransit.ts` (raw-route retention as a
+  byproduct of the existing `buildTramRouteIndex` fetch,
+  `resolveTramRouteDebug()`, `TramRouteResolution`/reason type,
+  `routeId` declared on `TramPosition` — flowed already, not in
+  equality), `src/map/TramMarkerPopup.ts` (new: readout builder,
+  escapeHtml for feed values), `src/map/TramMarkers.ts` (popup bind/
+  open helpers, per-marker popup refresh inside the existing
+  `update()` pass, `latestPositions` debug map), `src/index.css`
+  (`.tram-debug-popup` styles), `Docs/digitransit.md` (retention,
+  resolver, popup behavior).
+- **Checks**: `npm install` (no `package.json` change),
+  `npm run lint`, `npm run format:check`, `npm run build` green;
+  `dist/` deleted after. API key never printed or committed
+  (`.env.local` stays git-ignored).
+- **Live verification** (headless Chrome + CDP over the real feed,
+  46/46 checks pass): real click on a marker body opens the popup
+  bound to the clicked marker (popup latlng == marker latlng); every
+  row matches the algorithm (raw routeId, index membership, GTFS
+  shortName, `isTramLineShortName` result, shown line ==
+  `resolveTramShortName` == snapshot, offline boolean == marker CSS
+  class, fleet model/category/source, freshness with the 300 s
+  budget, heading/speed, summary phrasing); popup followed the marker
+  for 17 samples over ~32 s of real movement with the readout
+  refreshing (Received at advanced); route-resolution captured for
+  two vehicles (40/73 route 1003→line 3, 40/641 route 1005→line 5);
+  clicking different markers rewrites the single popup; the native
+  title tooltip still works and matches the algorithm; the snapshot
+  state stayed untouched (panel stayed Live).
+- **Red-dot path disclosed**: no offline tram was reporting during
+  the window, so the red-dot popup was verified by synthetic
+  injection through the REAL `TramMarkerLayer` class on the real map
+  (separate layer instance; the app's snapshot state untouched):
+  vehicle 2/531 with raw routeId `1009TX` showed offline=yes, reason
+  "route absent from the GTFS route list", and the summary "Red dot:
+  route 1009TX is not in the GTFS line index (route absent from the
+  GTFS route list)"; removing the synthetic vehicle from that layer
+  closed its popup (real removal path).
+- **Known limitations**: mobile/small-viewport behavior is verified
+  manually by the user after merge (Leaflet default popup sizing, no
+  custom breakpoint logic); popup content is built as an HTML string
+  from feed values — escaped, but reviewed as presentation only.

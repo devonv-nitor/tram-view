@@ -38,6 +38,14 @@ number - even when its route resolves to no displayed line, where any other
 vehicle would show the red dot - plus its own legend entry; it never tallies
 into the MLNRV (category A) count the number ranges would otherwise give it.
 
+Debug route resolution (TV-0016): the one per-session line-metadata query
+also retains the raw GTFS route list (gtfsId, mode, shortName) alongside the
+filtered tram-line index (`src/lib/digitransit.ts`). The rendering logic
+never consults it; `resolveTramRouteDebug()` uses it - no extra request - so
+the marker popup can tell the index's conflated null-reasons apart: route
+absent from the GTFS route list, not TRAM mode, TRAM route without a GTFS
+shortName, or a shortName failing the tram-line criteria.
+
 ## API key setup
 
 1. Register for a digitransit subscription key at
@@ -99,5 +107,23 @@ vehicle's reported heading, and a hover tooltip with the full model name,
 managed by `src/map/TramMarkers.ts`; an out-of-service vehicle swaps the
 line short name for the red not-in-service dot, and the SpåraKoff bar tram
 (TV-0013) always shows its `K` and its own color instead of both).
+
+TV-0016: clicking or tapping a marker body opens a Leaflet popup bound to
+that marker (`src/map/TramMarkerPopup.ts`), so it follows the tram as it
+moves. It is the in-field diagnostic for the red-dot decision: identity
+(oper/veh key), fleet type and its source (vehicle-number range lookup vs
+the SpåraKoff special case, including what the range lookup alone would say
+for car #175), the full route resolution (raw HFP `routeId`, the `HSL:`
+GTFS key, membership in the tram-line index, the GTFS shortName, whether it
+passes `isTramLineShortName`, and the distinct null-reason when absent -
+route absent from GTFS / not TRAM mode / no GTFS shortName / shortName
+failing the line criteria), the line the snapshot actually shows, the
+computed offline boolean, a one-line red-dot verdict, and freshness
+(`receivedAt`, its age in seconds, and the staleness budget). The readout
+refreshes with every snapshot while open and closes by itself when the
+vehicle drops from the snapshot; one popup shows at a time, and closing is
+normal Leaflet behavior (× button, map click, Esc). It is presentation
+only: the popup reads the same state the markers render, never mutates it,
+and nothing is persisted. The native hover tooltip is untouched.
 While the tab is hidden, the position stream and the one-second snapshot tick pause
 entirely and resume on focus, so a hidden tab pulls no feed traffic.
