@@ -160,7 +160,14 @@ export function useVehicleTelemetry(
 
     const start = () => {
       if (stream === null) {
-        stream = subscribeVehicleEvents(operatorId, vehicleNumber, {
+        // The client reports a socket error even when we closed it on purpose
+        // (the broker's close frame races ours), so a stream we closed must not
+        // log or show anything. The flag is scoped to this one stream, not to
+        // the effect: a flapping tab can close and replace the stream inside one
+        // effect run, and a late error from the old socket must not be reported
+        // as a failure of the new one.
+        let closed = false;
+        const handle = subscribeVehicleEvents(operatorId, vehicleNumber, {
           onEvent: (event) => {
             accumulatedRef.current = applyVehicleEvent(
               accumulatedRef.current,
@@ -172,10 +179,17 @@ export function useVehicleTelemetry(
             if (isConnected) setError(null);
           },
           onError: (cause) => {
+            if (closed) return;
             console.error("[tram-view] vehicle stream error:", cause.message);
             setError(cause);
           },
         });
+        stream = {
+          close: () => {
+            closed = true;
+            handle.close();
+          },
+        };
       }
       if (snapshotTimer === null) {
         publish();
