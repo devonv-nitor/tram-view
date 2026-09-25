@@ -152,6 +152,11 @@ export function useVehicleTelemetry(
   useEffect(() => {
     let stream: TramStreamHandle | null = null;
     let snapshotTimer: number | null = null;
+    // True while the current stream is being closed on purpose (page unmount,
+    // hidden tab): the client reports socket errors regardless of a deliberate
+    // close (the broker's close frame races ours), and that late error is not a
+    // stream failure to log or show.
+    let streamClosed = false;
 
     const publish = () => {
       setRetained(accumulatedRef.current);
@@ -160,6 +165,7 @@ export function useVehicleTelemetry(
 
     const start = () => {
       if (stream === null) {
+        streamClosed = false;
         stream = subscribeVehicleEvents(operatorId, vehicleNumber, {
           onEvent: (event) => {
             accumulatedRef.current = applyVehicleEvent(
@@ -172,6 +178,7 @@ export function useVehicleTelemetry(
             if (isConnected) setError(null);
           },
           onError: (cause) => {
+            if (streamClosed) return;
             console.error("[tram-view] vehicle stream error:", cause.message);
             setError(cause);
           },
@@ -189,6 +196,7 @@ export function useVehicleTelemetry(
         snapshotTimer = null;
       }
       if (stream !== null) {
+        streamClosed = true;
         stream.close();
         stream = null;
         setConnected(false);

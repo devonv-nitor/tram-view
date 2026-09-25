@@ -125,6 +125,11 @@ export function useTramPositions(): TramPositionsState {
 
     let stream: TramStreamHandle | null = null;
     let snapshotTimer: number | null = null;
+    // True while the current stream is being closed on purpose (page unmount,
+    // hidden tab). The client reports socket errors regardless of a deliberate
+    // close - the broker's close frame races ours - so that late error must
+    // not be logged or shown as a stream failure.
+    let streamClosed = false;
 
     const takeSnapshot = () => {
       setState((prev) => {
@@ -179,6 +184,7 @@ export function useTramPositions(): TramPositionsState {
 
     const start = () => {
       if (stream === null) {
+        streamClosed = false;
         stream = subscribeTramPositions({
           onPosition: (position) => {
             latestPositionsRef.current.set(vehicleKey(position), position);
@@ -187,6 +193,7 @@ export function useTramPositions(): TramPositionsState {
             connectedRef.current = connected;
           },
           onError: (error) => {
+            if (streamClosed) return;
             console.error(
               "[tram-view] tram position stream error:",
               error.message,
@@ -207,6 +214,7 @@ export function useTramPositions(): TramPositionsState {
         snapshotTimer = null;
       }
       if (stream !== null) {
+        streamClosed = true;
         stream.close();
         stream = null;
         connectedRef.current = false;
