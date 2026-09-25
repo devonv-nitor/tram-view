@@ -13,7 +13,7 @@ polling) is recorded in
 | Tram vehicle positions (lat/lon, heading, speed, direction, route id, vehicle number) | HFP MQTT over WebSockets, `wss://mqtt.hsl.fi:443/`, topic `/hfp/v2/journey/ongoing/vp/tram/#` (push, ~1 update/s per vehicle) | not needed |
 | Tram line metadata (route id -> short name, mode) | Routing API v2 GraphQL, `POST https://api.digitransit.fi/routing/v2/hsl/gtfs/v1`, query `routes { gtfsId shortName mode }`, fetched once per session and cached | required |
 | One vehicle's full HFP event stream (position, stop events, doors, traffic-light priority) | same MQTT broker, filter `/hfp/v2/journey/ongoing/+/tram/<oper>/<veh>/#` - one vehicle, every event type (TV-0017) | not needed |
-| One line's stop sequence | Routing API v2 GraphQL, query `route(id: "HSL:<routeId>") { patterns { directionId headsign stops { gtfsId name lat lon } } }`, once per (route, direction) per session and cached (TV-0017) | required |
+| One line's stop sequences | Routing API v2 GraphQL, query `route(id: "HSL:<routeId>") { patterns { directionId headsign stops { gtfsId name lat lon } vehiclePositions { vehicleId } } }`, once per route per session and cached; which pattern is shown is chosen per vehicle from the API's own live-trip match (TV-0017, TV-0020) | required |
 
 The positions subscription is anonymous. The line-metadata query and the
 basemap tiles require a digitransit subscription key; without one the app
@@ -152,6 +152,18 @@ less). What the page shows, and the honesty limits on each reading:
 - **Per-session only.** No `localStorage`, `sessionStorage`, IndexedDB or
   cookies; the retained 200-event list, the 400 message identities and the
   15-minute `dl` window are dropped when the page closes.
+- **Which pattern of the line is shown (TV-0020).** A route has several
+  patterns per `directionId`, so the page resolves the vehicle's own trip from
+  the routing API's `patterns.vehiclePositions` (the API matches HFP to trips
+  itself) and only falls back to an inference - direction, then headsign
+  containment, then the reported next stop, then the longest pattern - when no
+  live trip is reported. The card labels an inferred pattern, and the raw
+  reported stop id plus the "next stop is not in this pattern" note remain the
+  honest output when the chosen pattern really does not contain that stop. The
+  measured failure the selection replaced: the first pattern with a matching
+  `directionId` did not contain the reported next stop for 16.5% of live
+  vehicles
+  ([ADR 0002 amendment](./ADR/0002-data-transport.md#additional-keyed-graphql-query)).
 
 Positions and line metadata are produced by `src/lib/hfp.ts` and
 `src/lib/digitransit.ts`, and surfaced to UI code as `TramPosition` objects

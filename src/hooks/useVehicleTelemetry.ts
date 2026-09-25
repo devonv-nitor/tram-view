@@ -21,10 +21,15 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   loadTramRouteIndex,
-  loadTripPattern,
+  loadRoutePatterns,
   resolveTramShortName,
   type TripPattern,
 } from "../lib/digitransit.ts";
+import {
+  liveVehicleId,
+  selectTripPattern,
+  type PatternSelection,
+} from "../lib/journey.ts";
 import {
   subscribeVehicleEvents,
   vehicleTopicFilter,
@@ -83,6 +88,9 @@ export interface VehicleTelemetryView {
   pattern: TripPattern | null;
   patternStatus: PatternStatus;
   patternError: Error | null;
+  /** TV-0020: how the pattern was chosen (exact live trip vs which filters
+   * narrowed the inference), so the UI can label an inferred choice. */
+  patternSelection: PatternSelection;
   /** The subscription this page opened, shown in the readout. */
   topicFilter: string;
   /** Snapshot time. */
@@ -110,12 +118,13 @@ export function useVehicleTelemetry(
   const [routeIndex, setRouteIndex] = useState<Map<string, string> | null>(
     null,
   );
-  /** The stop-sequence query's outcome together with the (route, direction)
-   * it belongs to, so loading is *derived* from "no result for this key yet"
-   * instead of being set from inside an effect. */
+  /** The route-patterns query's outcome together with the route it belongs
+   * to, so loading is *derived* from "no result for this route yet" instead
+   * of being set from inside an effect. One result covers every pattern of
+   * the route; which one is shown is selected per vehicle (TV-0020). */
   const [patternResult, setPatternResult] = useState<{
-    key: string;
-    pattern: TripPattern | null;
+    routeId: string;
+    patterns: TripPattern[];
     error: Error | null;
   } | null>(null);
 
@@ -221,50 +230,67 @@ export function useVehicleTelemetry(
     };
   }, [operatorId, vehicleNumber]);
 
-  // The spine's stop sequence: one query per (route, direction) per session,
-  // issued as soon as the stream tells us which journey this is (and again if
-  // the vehicle changes line or direction). A failure never blocks the
-  // telemetry - it is shown as an unavailable stop sequence.
+  // The spine's stop sequence: one query per route per session, issued as
+  // soon as the stream tells us which route this journey is on (and again if
+  // the vehicle changes line). A failure never blocks the telemetry - it is
+  // shown as an unavailable stop sequence.
   const routeId = retained.telemetry?.routeId ?? null;
-  const direction = retained.telemetry?.directionId ?? null;
-  const patternKey =
-    routeId === null || direction === null ? null : `${routeId}/${direction}`;
   useEffect(() => {
-    if (patternKey === null) return;
-    const key = patternKey;
+    if (routeId === null) return;
     let cancelled = false;
-    loadTripPattern(key.split("/")[0], key.split("/")[1])
-      .then((loaded) => {
+    loadRoutePatterns(routeId)
+      .then((patterns) => {
         if (cancelled) return;
-        setPatternResult({ key, pattern: loaded, error: null });
+        setPatternResult({ routeId, patterns, error: null });
       })
       .catch((cause: unknown) => {
         if (cancelled) return;
         const failure = toError(cause);
-        console.error("[tram-view] trip pattern failed:", failure.message);
-        setPatternResult({ key, pattern: null, error: failure });
+        console.error("[tram-view] route patterns failed:", failure.message);
+        setPatternResult({ routeId, patterns: [], error: failure });
       });
     return () => {
       cancelled = true;
     };
-  }, [patternKey]);
+  }, [routeId]);
 
-  // Loading is the absence of a result for the current key; a result for a
-  // previous key (the vehicle changed line) is not shown at all.
+  // Loading is the absence of a result for the current route; a result for a
+  // previous route (the vehicle changed line) is not shown at all.
   const current =
-    patternResult !== null && patternResult.key === patternKey
+    patternResult !== null && patternResult.routeId === routeId
       ? patternResult
       : null;
-  const pattern = current?.pattern ?? null;
   const patternError = current?.error ?? null;
+
+  // TV-0020: which of those patterns **this vehicle** is on. The choice is
+  // recomputed as the stream arrives (the topic's direction/headsign and the
+  // reported next stop are the fallback's inputs); the live-trip match does
+  // not depend on any of them.
+  const patternSelection = useMemo(
+    () =>
+      selectTripPattern(current?.patterns ?? [], {
+        direction: retained.telemetry?.directionId ?? null,
+        headsign: retained.telemetry?.topic.headsign ?? null,
+        nextStopId: retained.nextStopId,
+        vehicleId: liveVehicleId(operatorId, vehicleNumber),
+      }),
+    [
+      current,
+      retained.telemetry,
+      retained.nextStopId,
+      operatorId,
+      vehicleNumber,
+    ],
+  );
+  const pattern = patternSelection.pattern;
   const patternStatus: PatternStatus =
-    patternKey === null
+    routeId === null
       ? "idle"
       : current === null
         ? "loading"
         : current.error !== null
           ? "error"
-          : current.pattern === null
+          : pattern === null
             ? "missing"
             : "ready";
 
@@ -302,6 +328,7 @@ export function useVehicleTelemetry(
     pattern,
     patternStatus,
     patternError,
+    patternSelection,
     topicFilter,
     now,
   };

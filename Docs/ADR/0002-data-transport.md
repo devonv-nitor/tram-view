@@ -170,7 +170,10 @@ Option C.
 ## Amendment: vehicle-scoped subscription for the vehicle overview page
 
 - Status: Accepted (2026-09-25, user decision); implemented and merged
-  2026-09-25 by TV-0017 (retired task; merge commit `750d640`).
+  2026-09-25 by TV-0017 (retired task; merge commit `750d640`). The
+  "Additional keyed GraphQL query" section below was corrected by TV-0020
+  (the query is per route and the pattern is resolved from the vehicle's live
+  trip; the first-pattern-by-`directionId` rule it replaced was the defect).
 - Decides: the MQTT subscription scope, the retained per-vehicle event set
   and retention window, and the additional keyed GraphQL query that the
   vehicle overview page needs.
@@ -246,24 +249,69 @@ argument, as the map page above.
 ### Additional keyed GraphQL query
 
 The overview resolves its journey-spine stop names from the keyed Routing API
-by fetching **one trip pattern per (route, direction) per session**:
+by fetching **every trip pattern of one route per session**:
 
 ```
 query { route(id: "HSL:<routeId>") { patterns { directionId headsign
-  stops { gtfsId name lat lon } } } }
+  stops { gtfsId name lat lon } vehiclePositions { vehicleId } } } }
 ```
 
 - Verified live on 2026-09-25: `HSL:1004` returns 4 patterns (23 stops for
   `directionId` 1) and `HSL:2015` returns 3 (34 stops), each stop with
   `lat`/`lon`, so stop names and ahead/behind distances come from this one
   cached query. The key is required (HTTP 401 without it, ADR-0003).
-- The pattern is selected by `directionId === Number(dir) - 1`: the MQTT
-  topic `dir` is **1-based** and the GraphQL `directionId` is **0-based**.
-  Verified on 12 live tram routes (1001-1013, 2015): every observed
-  `dir`/headsign pair matched `directionId + 1`/headsign.
-- Selection must **not** use the headsign string: the topic headsign is
-  abbreviated where GTFS is not (`Olympiaterm.` in the topic vs
-  `Olympiaterminaali` in GraphQL for routes 1002/1003).
+- The query is per **route**, not per route+direction (TV-0020): a route has
+  several patterns per `directionId` (short-turn and service variants), so a
+  result for one direction cannot answer for the other and does not say which
+  variant the vehicle is on. Measured payload: ~0.3 KB per route for the
+  whole live fleet (11 routes, 3.3 KB total), so one request per route is
+  cheaper than one per route+direction pair.
+- The topic `dir` is **1-based** and the GraphQL `directionId` is **0-based**.
+- **`directionId` does not identify the pattern.** `HSL:1005` returns four
+  patterns of which three share `directionId` 1 (8 stops -> `Katajanokan
+  term.`, 11 stops -> `Jätkäsaari`, 18 stops -> `Jätkäsaari`), and the 8-stop
+  one runs the opposite way; `HSL:1001` has `directionId` 0 patterns of 27,
+  26 and 11 stops and `directionId` 1 patterns of 17, 16, 27 and 26.
+- The pattern is therefore resolved from the **vehicle's own live trip**:
+  each pattern carries `vehiclePositions { vehicleId }`, and `vehicleId` is
+  the HFP identity as `HSL:<operator>/<vehicle>` (unpadded, e.g.
+  `HSL:40/641`) - the Routing API performs the HFP-to-trip matching itself.
+  Measured over the live tram fleet (two ~60-90 s samples, 84-88 vehicles):
+  78 vehicles resolved, **no** vehicle claimed by more than one pattern, and
+  **every** resolved pattern contained the stop the HFP stream reported next
+  (78/78). The 6-10 unresolved vehicles are ones the API had no live trip
+  for at that moment (just out of or entering service). Reproduced on the
+  reported defect: vehicle `40/641` resolves to the 18-stop `Jätkäsaari`
+  pattern, the one that contains the reported next stop `1040411`
+  (Simonkatu).
+- When no live trip resolves the vehicle, the pattern is **inferred** from the
+  route's patterns: filter to `directionId` -> headsign containment ->
+  containment of the reported next stop -> take the longest candidate, first
+  in API order as the final tie-break. Measured against the live-trip truth
+  over the same fleet, the inference agreed on 74% of vehicles and always
+  returned a candidate (never an empty result); the disagreements were
+  always a different variant of the same direction and headsign (e.g. 27 vs
+  26 stops), which is why it is labelled as inferred in the UI rather than
+  presented as the vehicle's trip.
+- The headsign may be used **only** inside that inference, as a
+  case/punctuation-insensitive containment test in either direction (the
+  topic abbreviates where GTFS does not: `Olympiaterm.` vs
+  `Olympiaterminaali`), and a headsign that matches nothing must leave the
+  candidates unchanged. It is not a usable identifier: the per-pattern
+  `headsign` describes the route direction's label, not the trip destination
+  - live, the vehicle `40/641` reported as `dir=2`/`Jätkäsaari` by HFP sat on
+  a pattern whose `headsign` is `Jätkäsaari` while running towards
+  `Katajanokan term.`
+- The old rule (`find` the **first** pattern with the matching `directionId`)
+  was the defect this replaces: over the live fleet it selected a pattern
+  that does not contain the stream's reported next stop for 13 of 79
+  vehicles (16.5%), which is what produced the raw stop ids and the "next
+  stop is not in this pattern" note on the vehicle page.
+- Selection order and its evidence are recorded in the code
+  (`selectTripPattern` in `src/lib/journey.ts`) and shown in the UI: the
+  stop-sequence card labels an inferred pattern and lists the filters that
+  narrowed it, and the genuine "reported next stop is not in this pattern"
+  note is kept for the case where the chosen pattern really lacks the stop.
 - The overview needs the per-session `routes` index as well, only to keep the
   out-of-service rule identical to the map's (TV-0011, `resolveTramShortName`)
   - that query is already cached per session and is not re-issued.
@@ -348,8 +396,8 @@ constraints on what the overview may claim, not implementation choices:
 ### Consequences
 
 - The overview page's data path is one vehicle-scoped MQTT filter plus two
-  cached per-session keyed queries (the existing `routes` index and one
-  pattern per route+direction). Its MQTT load is ~1/100th of the map page's;
+  cached per-session keyed queries (the existing `routes` index and the
+  route's patterns). Its MQTT load is ~1/100th of the map page's;
   it never subscribes to the network-wide filter.
 - The overview must collapse duplicate deliveries before retaining anything:
   a repeat counts as one received message, not as a second door event, a

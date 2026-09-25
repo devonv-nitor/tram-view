@@ -648,6 +648,15 @@ body {
   line-height: 1.5;
 }
 
+/* An inferred pattern is not a fact about this vehicle's trip; it is marked so
+   the reader never reads it as one (TV-0020). */
+.card__tag--inferred {
+  padding: 0.1rem 0.4rem;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  color: var(--ov-behind);
+}
+
 .pill {
   flex: none;
   padding: 0.25rem 0.55rem;

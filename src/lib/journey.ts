@@ -4,10 +4,11 @@
  * the reported schedule deviation imply for arrival.
  *
  * Everything derived here is labelled as derived in the UI: the stop sequence
- * comes from the keyed trip-pattern query (`directionId === Number(dir) - 1`),
- * the distance is straight-line from the reported position to the pattern
- * stop's coordinates, and the estimate is `timetable - dl` using the *reported*
- * deviation and its age - never presented as a measurement.
+ * comes from the keyed trip-pattern query and is tied to the vehicle's own
+ * live trip (TV-0020, `selectTripPattern`), the distance is straight-line from
+ * the reported position to the pattern stop's coordinates, and the estimate is
+ * `timetable - dl` using the *reported* deviation and its age - never
+ * presented as a measurement.
  */
 import type { TripPattern } from "./digitransit.ts";
 import { formatClock } from "./format.ts";
@@ -70,6 +71,163 @@ export function distanceMeters(
 /** The bare HFP stop id behind a GTFS stop id. */
 export function bareStopId(gtfsId: string): string {
   return gtfsId.startsWith("HSL:") ? gtfsId.slice(4) : gtfsId;
+}
+
+/** The HFP identity of a vehicle as the Routing API names it in
+ * `patterns.vehiclePositions.vehicleId`: `HSL:<operator>/<vehicle>`, unpadded
+ * (vehicle `0040/00641` reports as `HSL:40/641`). Returns null for numbers
+ * that are not non-negative integers. */
+export function liveVehicleId(
+  operatorId: number,
+  vehicleNumber: number,
+): string | null {
+  if (!Number.isInteger(operatorId) || !Number.isInteger(vehicleNumber)) {
+    return null;
+  }
+  if (operatorId < 0 || vehicleNumber < 0) return null;
+  return `HSL:${operatorId}/${vehicleNumber}`;
+}
+
+/** Everything the pattern choice may look at. All of it comes from the
+ * stream: the topic's 1-based `dir` and its (abbreviated) headsign, the next
+ * stop id, and the vehicle's own identity. */
+export interface PatternCriteria {
+  direction: string | null;
+  headsign: string | null;
+  nextStopId: string | null;
+  vehicleId: string | null;
+}
+
+/** Why no pattern could be chosen. */
+export type PatternMissReason =
+  "no-patterns" | "direction-unknown" | "no-pattern-for-direction";
+
+export interface PatternSelection {
+  pattern: TripPattern | null;
+  /** True only when the Routing API reports this vehicle running a trip of
+   * this pattern (`vehiclePositions`), which is the one case that is a fact
+   * rather than an inference. */
+  exact: boolean;
+  /** The filters that actually narrowed the candidate set, in application
+   * order - shown in the UI so an inferred choice is visible as one. */
+  filters: string[];
+  missReason: PatternMissReason | null;
+}
+
+/** Case- and punctuation-insensitive comparison form for headsigns: the HFP
+ * topic abbreviates (`Olympiaterm.`) where GTFS does not
+ * (`Olympiaterminaali`), so only containment can be compared. */
+function comparableHeadsign(value: string): string {
+  return value.toLowerCase().replace(/[^\p{Letter}\p{Number}]/gu, "");
+}
+
+function narrow(
+  candidates: TripPattern[],
+  matching: TripPattern[],
+  filter: string,
+): { candidates: TripPattern[]; filters: string[] } {
+  if (matching.length === 0 || matching.length === candidates.length) {
+    return { candidates, filters: [] };
+  }
+  return { candidates: matching, filters: [filter] };
+}
+
+/** TV-0020: which of a route's patterns is this vehicle running?
+ *
+ * A route has many patterns per `directionId` (short-turn and service
+ * variants), so `directionId` alone picks an arbitrary one - observed live on
+ * `HSL:1005`, where one `directionId` group of three contains both
+ * `Jätkäsaari`-bound patterns of 11 and 18 stops and an 8-stop
+ * `Katajanokan term.` pattern going the other way.
+ *
+ * The Routing API does the HFP-to-trip matching itself and publishes the
+ * result as each pattern's `vehiclePositions`, so an exact match on the
+ * vehicle's own id wins outright. Only when the API reports no live trip for
+ * the vehicle (just left the depot, changed line, stale match) does the
+ * fallback chain run: direction, then headsign containment, then containment
+ * of the reported next stop, then the longest candidate. Longest is the
+ * measured best proxy: against the live-trip truth over the whole live fleet
+ * it agreed on 63 of 84 vehicles versus 52 for shortest (25% vs 37% of the
+ * inferred picks were a different variant of the same direction and
+ * headsign). Every inferred choice is marked `exact: false` and labels its
+ * filters, so the UI never presents a guess as the vehicle's trip. */
+export function selectTripPattern(
+  patterns: TripPattern[],
+  criteria: PatternCriteria,
+): PatternSelection {
+  if (patterns.length === 0) {
+    return {
+      pattern: null,
+      exact: false,
+      filters: [],
+      missReason: "no-patterns",
+    };
+  }
+  if (criteria.vehicleId !== null) {
+    const live = patterns.find((pattern) =>
+      pattern.liveVehicles.includes(criteria.vehicleId as string),
+    );
+    if (live !== undefined) {
+      return {
+        pattern: live,
+        exact: true,
+        filters: ["live trip"],
+        missReason: null,
+      };
+    }
+  }
+  const directionId = Number(criteria.direction) - 1;
+  if (criteria.direction === null || !Number.isInteger(directionId)) {
+    return {
+      pattern: null,
+      exact: false,
+      filters: [],
+      missReason: "direction-unknown",
+    };
+  }
+  let candidates = patterns.filter(
+    (pattern) => pattern.directionId === directionId,
+  );
+  const filters: string[] = [];
+  if (candidates.length === 0) {
+    return {
+      pattern: null,
+      exact: false,
+      filters,
+      missReason: "no-pattern-for-direction",
+    };
+  }
+  filters.push("direction");
+  if (criteria.headsign !== null) {
+    const wanted = comparableHeadsign(criteria.headsign);
+    if (wanted.length > 0) {
+      const matched = candidates.filter((pattern) => {
+        const candidate = comparableHeadsign(pattern.headsign ?? "");
+        return (
+          candidate.includes(wanted) ||
+          (candidate.length > 0 && wanted.includes(candidate))
+        );
+      });
+      const narrowed = narrow(candidates, matched, "headsign");
+      candidates = narrowed.candidates;
+      filters.push(...narrowed.filters);
+    }
+  }
+  if (criteria.nextStopId !== null) {
+    const matched = candidates.filter((pattern) =>
+      pattern.stops.some(
+        (stop) => bareStopId(stop.gtfsId) === criteria.nextStopId,
+      ),
+    );
+    const narrowed = narrow(candidates, matched, "next stop");
+    candidates = narrowed.candidates;
+    filters.push(...narrowed.filters);
+  }
+  const pattern = candidates.reduce((best, candidate) =>
+    candidate.stops.length > best.stops.length ? candidate : best,
+  );
+  if (candidates.length > 1) filters.push("longest");
+  return { pattern, exact: false, filters, missReason: null };
 }
 
 /** Places the vehicle in its pattern using the next stop id it reports.

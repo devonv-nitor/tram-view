@@ -223,11 +223,13 @@ function PatternNote({ view }: { view: VehicleTelemetryView }) {
   if (view.patternStatus === "ready") return null;
   const text =
     view.patternStatus === "idle"
-      ? "Waiting for the vehicle's route and direction before asking the Routing API for this line's stop sequence."
+      ? "Waiting for the vehicle's route before asking the Routing API for this line's stop sequence."
       : view.patternStatus === "loading"
-        ? "Loading this line's stop sequence from the keyed Routing API query…"
+        ? "Loading this line's stop sequences from the keyed Routing API query…"
         : view.patternStatus === "missing"
-          ? "The Routing API returned no pattern for this route and direction, so the stop sequence cannot be shown. Telemetry is unaffected."
+          ? view.patternSelection.missReason === "no-pattern-for-direction"
+            ? `The Routing API returned no pattern of route ${view.retained.telemetry?.routeId ?? "?"} in the direction this vehicle reports, so the stop sequence cannot be shown. Telemetry is unaffected.`
+            : `The Routing API returned no trip patterns for route ${view.retained.telemetry?.routeId ?? "?"}, so the stop sequence cannot be shown. Telemetry is unaffected.`
           : `The stop-sequence query failed (${view.patternError?.message ?? "unknown error"}). Telemetry is unaffected.`;
   return (
     <section className="card" aria-label="Stop sequence">
@@ -294,7 +296,12 @@ export function VehicleOverview({
         <div className="overview__col">
           <Hero view={view} derived={derived} />
           {journey.stops.length > 0 ? (
-            <JourneySpine stops={journey.stops} nextStopId={view.nextStopId} />
+            <JourneySpine
+              stops={journey.stops}
+              nextStopId={view.nextStopId}
+              exact={view.patternSelection.exact}
+              filters={view.patternSelection.filters}
+            />
           ) : (
             <PatternNote view={view} />
           )}

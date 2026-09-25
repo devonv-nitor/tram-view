@@ -1,7 +1,11 @@
 /**
- * TV-0017: the journey spine - the vehicle's ordered stop sequence from the
- * keyed trip-pattern query, with the position marker between the stop the
- * vehicle left and the one it is heading to.
+ * TV-0017/TV-0020: the journey spine - the vehicle's ordered stop sequence
+ * from the keyed trip-pattern query, with the position marker between the stop
+ * the vehicle left and the one it is heading to.
+ *
+ * Which pattern of the line is shown is decided per vehicle (TV-0020): the
+ * Routing API's own live-trip match is exact, and anything else is labelled as
+ * an inferred variant in the card header rather than presented as fact.
  *
  * The list collapses by default (a terminus-to-terminus line is 23-34 rows of
  * thumb scrolling) and the toggle is a real >= 44 px button, because this page
@@ -65,9 +69,16 @@ function stopRow(stop: SpineStop) {
 export function JourneySpine({
   stops,
   nextStopId,
+  exact,
+  filters,
 }: {
   stops: SpineStop[];
   nextStopId: string | null;
+  /** True when the Routing API reports this vehicle on a trip of this
+   * pattern; false when the combination was inferred (see the note). */
+  exact: boolean;
+  /** The filters that narrowed the inferred choice, in order. */
+  filters: string[];
 }) {
   const [expanded, setExpanded] = useState(false);
   const nextIndex = stops.findIndex((stop) => stop.stopId === nextStopId);
@@ -89,7 +100,20 @@ export function JourneySpine({
           {stops.length} stops ·{" "}
           {nextIndex >= 0 ? `${nextIndex} passed` : "position unknown"}
         </span>
+        {exact ? null : (
+          <span className="card__tag card__tag--inferred">
+            inferred pattern ({filters.join(" + ")})
+          </span>
+        )}
       </h2>
+      {exact ? null : (
+        <p className="card__note">
+          The Routing API reports no live trip for this vehicle, so this stop
+          sequence is not confirmed: it is the line&apos;s pattern chosen by{" "}
+          {filters.join(" and ")}. It can be a different variant of the same
+          line (a short turn, or a service variant that skips or adds stops).
+        </p>
+      )}
       {nextIndex < 0 ? (
         <p className="card__note">
           The vehicle&apos;s reported next stop is not in this pattern, so the
