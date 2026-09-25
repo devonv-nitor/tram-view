@@ -2,10 +2,11 @@
  * TV-0017: the telemetry, door and traffic-light-priority cards.
  *
  * Each card states what the feed reported and, where the value is easy to
- * misread, what it does *not* mean: `occu` is always 0 for trams (so it is
- * printed as a reported value and nothing is derived from it), `drst` is a
- * bitfield of which only bit 0 is understood, and `tlr`/`tla` are
- * traffic-light-priority requests and decisions, not a live signal colour.
+ * misread, what it does *not* mean: `drst` is a bitfield of which only bit 0
+ * is understood, and `tlr`/`tla` are traffic-light-priority requests and
+ * decisions, not a live signal colour. (`occu` is not shown at all: the feed
+ * reports 0 for every tram, so it carries no information - TV-0021,
+ * ADR-0002.)
  */
 import type {
   HfpVehicleEvent,
@@ -108,11 +109,6 @@ export function TelemetryGrid({
           label="Odometer"
           value={telemetry.odometer === null ? "—" : `${telemetry.odometer} m`}
           note="odo, as reported"
-        />
-        <Metric
-          label="Occupancy"
-          value={telemetry.occu === null ? "—" : String(telemetry.occu)}
-          note="occu: the feed reports 0 for every tram, so no occupancy reading is shown"
         />
         <Metric
           label="Journey"
