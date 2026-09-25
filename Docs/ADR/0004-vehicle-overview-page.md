@@ -1,7 +1,7 @@
 # ADR 0004: Vehicle overview page
 
-- Status: **Accepted (2026-09-25, user decision); implemented (2026-09-25)**
-  by [TV-0017](../../Tasks/TV-0017-vehicle-overview.md), merged after review.
+- Status: **Accepted (2026-09-25, user decision); implemented and merged
+  (2026-09-25)** by TV-0017 (retired task; merge commit `750d640`).
 - Decides: that the per-vehicle overview is a separate page, how it is
   reached, its URL contract, which data client it owns, and the capabilities
   it deliberately excludes.

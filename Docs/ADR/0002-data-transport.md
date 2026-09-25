@@ -169,12 +169,8 @@ Option C.
 
 ## Amendment: vehicle-scoped subscription for the vehicle overview page
 
-- Status: Accepted (2026-09-25); implemented (2026-09-25) by
-  [TV-0017](../../Tasks/TV-0017-vehicle-overview.md).
-
-- Status: **Accepted (2026-09-25, user decision); accepted but not yet
-  implemented** - implementation task
-  [TV-0017](../../Tasks/TV-0017-vehicle-overview.md).
+- Status: Accepted (2026-09-25, user decision); implemented and merged
+  2026-09-25 by TV-0017 (retired task; merge commit `750d640`).
 - Decides: the MQTT subscription scope, the retained per-vehicle event set
   and retention window, and the additional keyed GraphQL query that the
   vehicle overview page needs.
