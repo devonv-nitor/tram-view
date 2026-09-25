@@ -171,10 +171,10 @@ Option C.
 
 - Status: Accepted (2026-09-25, user decision); implemented and merged
   2026-09-25 by TV-0017 (retired task; merge commit `750d640`). Two
-  corrections, both merged 2026-09-25: TV-0020 rewrote the
-  "Additional keyed GraphQL query" section below (the query is per route and
-  the pattern is resolved from the vehicle's live trip; the
-  first-pattern-by-`directionId` rule it replaced was the defect), and
+  corrections, both merged 2026-09-25 at `d0a747a` (both tasks retired):
+  TV-0020 rewrote the "Additional keyed GraphQL query" section below (the
+  query is per route and the pattern is resolved from the vehicle's live trip;
+  the first-pattern-by-`directionId` rule it replaced was the defect), and
   TV-0021 removed the always-0 `occu` field from the parsed event and the
   page's surfaces (see "Verified field facts").
 - Decides: the MQTT subscription scope, the retained per-vehicle event set
