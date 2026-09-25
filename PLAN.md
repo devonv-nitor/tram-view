@@ -1,6 +1,6 @@
 # Tram view plan
 
-Status: `TV-0018 (HSL basemap tiles) is REVIEW (implemented and live-verified, awaiting review and merge); TV-0019 (tram line overlay) is BLOCKED on a human decision; TV-0002..TV-0017 are merged, delta-reviewed and retired (MVP accepted; ADR-0003 key policy live; ADR-0004 vehicle overview page live; ADR-0001/ADR-0003 basemap amendments implemented by TV-0018).`
+Status: `TV-0018 (HSL basemap tiles) is DONE and merged; TV-0019 (tram line overlay) is BLOCKED on a human decision; TV-0002..TV-0017 are merged, delta-reviewed and retired (MVP accepted; ADR-0003 key policy live; ADR-0004 vehicle overview page live; ADR-0001/ADR-0003 basemap amendments implemented by TV-0018).`
 
 The application is a live view of all of the trams currently active in the HSL network,
 providing an at-a-glance view of the state of the tram system.
@@ -9,7 +9,7 @@ providing an at-a-glance view of the state of the tram system.
 
 | Task | Deliverable |
 | ---- | ----------- |
-| [TV-0018](Tasks/TV-0018-hsl-basemap-tiles.md) — `REVIEW` | Replace the OSM basemap with Digitransit HSL raster tiles (`hsl-map`, keyed Map API; ADR-0001/ADR-0003 amendments) — implemented and live-verified on a branch, awaiting review and merge |
+| [TV-0018](Tasks/TV-0018-hsl-basemap-tiles.md) — `DONE` | Replace the OSM basemap with Digitransit HSL raster tiles (`hsl-map`, keyed Map API; ADR-0001/ADR-0003 amendments) — implemented, live-verified, human-confirmed and merged (task file retired) |
 | [TV-0019](Tasks/TV-0019-tram-line-overlay.md) — `BLOCKED` | Tram line overlay on the basemap: source and scope undecided (`Decision requested` in the task) |
 
 ## Completed work
