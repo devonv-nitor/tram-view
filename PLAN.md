@@ -1,15 +1,23 @@
 # Tram view plan
 
-Status: `All defined work is complete: TV-0002..TV-0017 are merged, delta-reviewed and retired (MVP accepted; ADR-0003 key policy live; ADR-0004 vehicle overview page live).`
+Status: `TV-0018 (HSL basemap tiles) is READY; TV-0019 (tram line overlay) is BLOCKED on a human decision; TV-0002..TV-0017 are merged, delta-reviewed and retired (MVP accepted; ADR-0003 key policy live; ADR-0004 vehicle overview page live; ADR-0001/ADR-0003 basemap amendments defined by TV-0018).`
 
 The application is a live view of all of the trams currently active in the HSL network,
 providing an at-a-glance view of the state of the tram system.
 
+## Open work
+
+| Task | Deliverable |
+| ---- | ----------- |
+| [TV-0018](Tasks/TV-0018-hsl-basemap-tiles.md) — `READY` | Replace the OSM basemap with Digitransit HSL raster tiles (`hsl-map`, keyed Map API; ADR-0001/ADR-0003 amendments) |
+| [TV-0019](Tasks/TV-0019-tram-line-overlay.md) — `BLOCKED` | Tram line overlay on the basemap: source and scope undecided (`Decision requested` in the task) |
+
 ## Completed work
 
-All defined work is merged, delta-reviewed and retired; the retired tasks are
-listed below, and [Tasks/](Tasks/) holds only
-[_template.md](Tasks/_template.md), from which new work is defined.
+All work through TV-0017 is merged, delta-reviewed and retired; the retired
+tasks are listed below. New work is defined from
+[_template.md](Tasks/_template.md) and listed under
+[Open work](#open-work).
 
 | Task                                           | Deliverable                                                       |
 | ---------------------------------------------- | ----------------------------------------------------------------- |
@@ -34,5 +42,6 @@ shipped, the post-MVP polish wave (TV-0012..TV-0016) is complete, and the
 per-vehicle overview (TV-0017, [ADR-0004](Docs/ADR/0004-vehicle-overview-page.md))
 is live.** The deployed site is live at
 <https://devonv-nitor.github.io/tram-view/> (public key policy per ADR-0003).
-There is no open work; new work is defined from
-[Tasks/_template.md](Tasks/_template.md).
+Open work is [TV-0018](Tasks/TV-0018-hsl-basemap-tiles.md) (the user-decided
+basemap swap) and [TV-0019](Tasks/TV-0019-tram-line-overlay.md) (tram line
+overlay, blocked on a human decision).
