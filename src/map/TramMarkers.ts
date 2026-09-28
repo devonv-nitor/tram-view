@@ -306,11 +306,12 @@ export class TramMarkerLayer {
 
   /** TV-0025: the ETA cell's value for one position - whole seconds to the
    * next stop, or null while it is not derivable (no reported deviation, no
-   * matched trip in the layer's cache yet, no stop time for the next stop).
-   * The timetable instant comes from the Routing API's live-trip match,
-   * loaded only while a popup is open and once per route per session;
-   * `now` is render time, so the value counts down with the ~1 Hz popup
-   * rebuild and needs no timer of its own. */
+   * matched trip in the layer's cache yet, no stop time for the next stop,
+   * or a corrected arrival materially in the past - TV-0026 renders the
+   * muted dash for that case too). The timetable instant comes from the
+   * Routing API's live-trip match, loaded only while a popup is open and
+   * once per route per session; `now` is render time, so the value counts
+   * down with the ~1 Hz popup rebuild and needs no timer of its own. */
   private etaSeconds(position: TramPosition): number | null {
     if (position.scheduleDeviation === null) return null;
     const instant = this.matchedTripInstant(position);
@@ -328,7 +329,10 @@ export class TramMarkerLayer {
    * API resolves elsewhere (TV-0022) - its patterns carry the vehicle's
    * trip. A route the layer does not have yet starts its one shared load
    * (the same per-session cache the stop names share) and yields null until
-   * it resolves; the load resolves into `refreshOpenPopups` either way. */
+   * it resolves; the load resolves into `refreshOpenPopups` either way.
+   * TV-0026: the reported deviation and render time ride along, so the day
+   * anchor can pick the trip-day candidate whose corrected arrival is
+   * nearest to now. */
   private matchedTripInstant(position: TramPosition): number | null {
     if (position.nextStopId === null) return null;
     const routeIds = [position.routeId];
@@ -346,6 +350,8 @@ export class TramMarkerLayer {
         patterns,
         position,
         position.nextStopId,
+        position.scheduleDeviation,
+        Date.now(),
       );
       if (instant !== null) return instant;
     }

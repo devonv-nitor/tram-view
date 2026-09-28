@@ -250,22 +250,45 @@ payloads carry no timetable field, so the instant comes from the keyed
 Routing API: the extended per-route pattern query also carries each matched
 vehicle's trip with its stop times (`loadRoutePatterns`, shared with the
 stop-names load and the overview's spine), and the timetable instant for the
-next stop is that trip's stop time matched by bare stop id, anchored to the
-Europe/Helsinki midnight of the trip's operating day (the day is parsed from
-the trip's gtfsId; stop times are seconds since local midnight, not epoch).
-The corrected arrival is the timetable instant minus the *reported* `dl`
-(positive = ahead of timetable, so it is subtracted - the same model as the
-vehicle overview's `estimateNextArrival` in `src/lib/journey.ts`), rendered
-as `max(0, round(etaMs / 1000))` from `now` at render time, so the value
+next stop is that trip's stop time matched by bare stop id. Stop times are
+seconds since Europe/Helsinki local midnight (not epoch), and TV-0026 anchors
+them to the day the tram is actually running: the day is resolved against
+both candidates - the day parsed from the trip's gtfsId and the current
+Helsinki date - and the candidate whose corrected arrival (midnight +
+seconds - `dl`) is nearest to `now` wins. Nearest-to-now is what makes the
+anchor honest in both directions: the API's live match can name a trip whose
+gtfsId day is days behind the day the vehicle is running (measured
+2026-09-28: 70 of 105 live-matched trips dated three days back, while the
+trip's own stop times lined up with the wall clock, and `Trip.serviceDay`
+being no queryable field), while a genuine post-midnight trip (`25:30` on
+yesterday's service day) must still resolve to today 01:30, the nearer
+candidate. The corrected arrival is the timetable instant minus the
+*reported* `dl` (positive = ahead of timetable, so it is subtracted - the
+same model as the vehicle overview's `estimateNextArrival` in
+`src/lib/journey.ts`), rendered from `now` at render time, so the value
 counts down with the popup's snapshot rebuild and no second timer exists. A
 differing `realtimeArrival` is preferred when the API supplies one (measured
-2026-09-26: it never differs today). The value is an estimate and is
+2026-09-26: it never differs today).
+
+TV-0026: `0` prints only when the answer is genuinely 0. The old clamp at 0
+(`max(0, round(etaMs / 1000))`) reported a passed estimate as a confident
+`0 s`: a large positive `dl` alone pushes the corrected arrival into the
+past (measured 2026-09-28: a vehicle standing at its trip origin reported
+`dl` +359 s), and a stop time anchored days back landed there too. The
+rendering is now the rule in `etaSecondsToNextStop` (`src/lib/journey.ts`):
+the rounded countdown while the corrected arrival is in the future (`0` only
+within half a second of `now`), `0` while it is at most 90 s past
+(`ETA_PAST_TOLERANCE_MS`; the tram is at or leaving the stop, where 0 is the
+true answer), and the muted `—` beyond that. A materially passed estimate
+therefore never prints a negative value and never prints a false `0`. The
+value is an estimate and is
 labelled one: the cell carries an accessible one-line explanation (and a
 hover title) that the figure is the timetable corrected by the reported
 deviation, not a measurement. The muted "—" is the fallback when the
 vehicle has no live trip in the API's match, the trip has no stop time for
-the next stop, the reported deviation is missing, or the load has not
-resolved - never a guess. The patterns request happens only while a popup
+the next stop, the reported deviation is missing, the load has not
+resolved, or the corrected arrival is materially in the past - never a
+guess. The patterns request happens only while a popup
 is open, once per route per session (cached per session alongside the
 stop-names load); there is **no second data stream** - no polling, no extra
 MQTT subscription, no new dependency (verified live 2026-09-28: the
