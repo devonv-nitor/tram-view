@@ -53,6 +53,16 @@ export interface TramPosition {
   speed: number | null;
   /** Epoch milliseconds of the vehicle-reported position event. */
   receivedAt: number;
+  /** Door state: "open" when bit 0 of drst is set, "closed" when clear,
+   * null when drst was not reported (TV-0023). */
+  doorState: "open" | "closed" | null;
+  /** Destination/headsign text from the HFP topic (TV-0023). */
+  headsign: string | null;
+  /** Next-stop id from the HFP topic (TV-0023). */
+  nextStopId: string | null;
+  /** HFP schedule deviation in seconds: positive = ahead of timetable,
+   * negative = behind (TV-0023). */
+  scheduleDeviation: number | null;
 }
 
 interface TramRoutesData {

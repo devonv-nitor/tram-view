@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Mockup 2 — Card-stack compact</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+    background: #e8eaee;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+  }
+
+  .mockup {
+    width: 320px;
+    background: #ffffff;
+    border-radius: 14px;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.12);
+    overflow: hidden;
+  }
+
+  /* Thin identity bar */
+  .id-bar {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.55rem 0.85rem;
+    background: #f7f8fa;
+    border-bottom: 1px solid #e3e6eb;
+    font-size: 0.78rem;
+  }
+  .id-bar__key {
+    font-weight: 700;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    color: #1b1e22;
+  }
+  .id-bar__sep {
+    color: #c4c8cf;
+  }
+  .id-bar__gtfs {
+    color: #5a6169;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 0.72rem;
+  }
+  .id-bar__line {
+    margin-left: auto;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    background: #fcb919;
+    color: #1a1a1a;
+    font-weight: 700;
+    font-size: 0.85rem;
+  }
+
+  /* Row-based layout */
+  .body {
+    padding: 0.65rem 0.85rem 0.75rem;
+  }
+
+  .row {
+    display: flex;
+    align-items: center;
+    padding: 0.35rem 0;
+    border-bottom: 1px solid #f0f1f4;
+    gap: 0.5rem;
+  }
+  .row:last-child {
+    border-bottom: none;
+  }
+
+  .row__label {
+    color: #5a6169;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    width: 3.8rem;
+    flex: none;
+  }
+  .row__value {
+    color: #1b1e22;
+    font-weight: 600;
+    font-size: 0.85rem;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  .row__value--green  { color: #1f7a4d; }
+  .row__value--red    { color: #b3261e; }
+  .row__value--amber  { color: #a15c00; }
+
+  .row__tag {
+    margin-left: auto;
+    padding: 0.1rem 0.45rem;
+    border-radius: 999px;
+    font-size: 0.65rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  .row__tag--open {
+    background: #e8f6ee;
+    color: #1f7a4d;
+  }
+  .row__tag--closed {
+    background: #f0f1f4;
+    color: #5a6169;
+  }
+  .row__tag--ahead {
+    background: #e8f6ee;
+    color: #1f7a4d;
+  }
+  .row__tag--behind {
+    background: #fdeceb;
+    color: #b3261e;
+  }
+
+  /* Headsign row: wider label */
+  .row__headsign {
+    font-weight: 600;
+    font-size: 0.85rem;
+    color: #1b1e22;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* Next stop gets a visual emphasis */
+  .row--next {
+    background: #f7f8fa;
+    margin: 0 -0.85rem;
+    padding: 0.45rem 0.85rem;
+    border-bottom: none;
+    border-top: 1px solid #e3e6eb;
+  }
+  .row--next .row__label {
+    width: auto;
+  }
+  .row--next .row__value {
+    font-size: 1rem;
+    font-weight: 700;
+  }
+</style>
+</head>
+<body>
+<div class="mockup">
+  <div class="id-bar">
+    <span class="id-bar__key">40/450</span>
+    <span class="id-bar__sep">·</span>
+    <span class="id-bar__gtfs">HSL:1005</span>
+    <span class="id-bar__line">5</span>
+  </div>
+
+  <div class="body">
+    <div class="row">
+      <span class="row__label">Headsign</span>
+      <span class="row__headsign">Katajanokka</span>
+    </div>
+    <div class="row">
+      <span class="row__label">Speed</span>
+      <span class="row__value">32 km/h · 215° SW</span>
+    </div>
+    <div class="row">
+      <span class="row__label">Doors</span>
+      <span class="row__value row__value--green">Closed</span>
+      <span class="row__tag row__tag--closed">CLOSED</span>
+    </div>
+    <div class="row">
+      <span class="row__label">Deviation</span>
+      <span class="row__value row__value--green">+12 s</span>
+      <span class="row__tag row__tag--ahead">AHEAD</span>
+    </div>
+  </div>
+
+  <div class="row row--next">
+    <span class="row__label">Next</span>
+    <span class="row__value">Eira</span>
+    <span class="row__tag row__tag--ahead">+12 s</span>
+  </div>
+</div>
+</body>
+</html>

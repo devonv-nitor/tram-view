@@ -10,6 +10,7 @@ providing an at-a-glance view of the state of the tram system.
 | Task | Deliverable |
 | ---- | ----------- |
 | [TV-0019](Tasks/TV-0019-tram-line-overlay.md) — `BLOCKED` | Tram line overlay on the basemap: source and scope undecided (`Decision requested` in the task) |
+| [TV-0023](Tasks/TV-0023-simplify-marker-popup.md) — `REVIEW` (`@thread:thr_8x3hjwrtrg`) | Marker click popup simplified to a compact HUD dashboard (mockup 1) |
 
 ## Completed work
 

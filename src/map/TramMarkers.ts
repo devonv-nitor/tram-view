@@ -44,7 +44,7 @@ import {
   type TramCategoryInfo,
 } from "../lib/fleet.ts";
 import { vehicleKey } from "../lib/hfp.ts";
-import { buildTramDebugHtml } from "./TramMarkerPopup.ts";
+import { buildTramPopupHtml } from "./TramMarkerPopup.ts";
 
 /** Marker body diameter in px; the line label sits centered inside the
  * rounded body and the teardrop point extends beyond it in the heading
@@ -196,7 +196,7 @@ export class TramMarkerLayer {
         // bindPopup hooks ('move' event) to keep the popup anchored to the
         // marker, not to a map point.
         if (marker.isPopupOpen()) {
-          marker.setPopupContent(buildTramDebugHtml(position));
+          marker.setPopupContent(buildTramPopupHtml(position));
         }
       }
       this.latestPositions.set(key, position);
@@ -223,7 +223,15 @@ export class TramMarkerLayer {
     marker: L.Marker,
     position: TramPosition,
   ): void {
-    marker.bindPopup(buildTramDebugHtml(position));
+    marker.bindPopup(buildTramPopupHtml(position), {
+      // TV-0023: the dark HUD shell is scoped by this class so Leaflet's
+      // default light popup chrome is restyled for this one popup type only
+      // (see index.css). Width is clamped here because Leaflet writes the
+      // width onto its content node, so CSS max-width cannot constrain it.
+      className: "tram-hud-shell",
+      minWidth: 260,
+      maxWidth: 300,
+    });
     marker.getElement()?.addEventListener("click", (event) => {
       event.stopPropagation();
       this.openDebugPopup(key);
@@ -242,7 +250,7 @@ export class TramMarkerLayer {
     const marker = this.markers.get(key);
     const position = this.latestPositions.get(key);
     if (marker === undefined || position === undefined) return;
-    marker.setPopupContent(buildTramDebugHtml(position));
+    marker.setPopupContent(buildTramPopupHtml(position));
     if (marker.isPopupOpen()) return;
     marker.openPopup();
   }

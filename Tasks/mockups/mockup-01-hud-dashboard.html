@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Mockup 1 — HUD-style dashboard</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+    background: #1b1e22;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+  }
+
+  /* Simulate a Leaflet popup floating over the map */
+  .mockup {
+    width: 320px;
+    background: #0f1114;
+    border: 1px solid #2a2d33;
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.6);
+  }
+
+  /* Header — vehicle identity row */
+  .popup-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.75rem 1rem;
+    background: #1a1d23;
+    border-bottom: 1px solid #2a2d33;
+  }
+  .popup-header__left {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  .line-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 36px;
+    height: 36px;
+    padding: 0 0.4rem;
+    border-radius: 8px;
+    background: #fcb919;
+    color: #1a1a1a;
+    font-weight: 700;
+    font-size: 1.1rem;
+  }
+  .vehicle-key {
+    color: #e0e2e6;
+    font-weight: 600;
+    font-size: 0.9rem;
+  }
+  .vehicle-key__gtfs {
+    display: block;
+    color: #6b7078;
+    font-weight: 400;
+    font-size: 0.68rem;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  .headsign-tag {
+    padding: 0.2rem 0.55rem;
+    border-radius: 999px;
+    background: #2a2d33;
+    color: #b0b4bb;
+    font-size: 0.68rem;
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100px;
+  }
+
+  /* Main data grid */
+  .popup-body {
+    padding: 0.75rem 1rem 0.85rem;
+  }
+
+  /* Two-column metric grid */
+  .metrics {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.5rem;
+    margin-bottom: 0.75rem;
+  }
+  .metric {
+    padding: 0.45rem 0.6rem;
+    border-radius: 8px;
+    background: #1a1d23;
+  }
+  .metric--full {
+    grid-column: 1 / -1;
+  }
+  .metric__label {
+    display: block;
+    color: #6b7078;
+    font-size: 0.6rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 0.15rem;
+  }
+  .metric__value {
+    display: block;
+    color: #e0e2e6;
+    font-size: 0.85rem;
+    font-weight: 600;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  .metric__value--green { color: #34d399; }
+  .metric__value--red   { color: #f87171; }
+  .metric__value--amber { color: #fbbf24; }
+  .metric__value--muted { color: #6b7078; }
+
+  /* Door state as a prominent indicator */
+  .door-indicator {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+  }
+  .door-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+  }
+  .door-dot--open  { background: #34d399; box-shadow: 0 0 6px #34d39988; }
+  .door-dot--closed { background: #6b7078; }
+
+  /* Next stop row */
+  .next-stop {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.55rem 0.65rem;
+    border-radius: 8px;
+    background: #1a1d23;
+    border-left: 3px solid #fcb919;
+  }
+  .next-stop__label {
+    color: #6b7078;
+    font-size: 0.6rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .next-stop__name {
+    color: #e0e2e6;
+    font-weight: 600;
+    font-size: 0.95rem;
+  }
+
+
+  /* Speed + heading as a compact pair */
+  .speed-heading {
+    display: flex;
+    gap: 0.5rem;
+  }
+  .speed-heading .metric {
+    flex: 1;
+  }
+</style>
+</head>
+<body>
+<div class="mockup">
+  <div class="popup-header">
+    <div class="popup-header__left">
+      <span class="line-badge">5</span>
+      <div>
+        <span class="vehicle-key">40/450</span>
+        <span class="vehicle-key__gtfs">HSL:1005</span>
+      </div>
+    </div>
+    <span class="headsign-tag">→ Katajanokka</span>
+  </div>
+
+  <div class="popup-body">
+    <div class="speed-heading">
+      <div class="metric">
+        <span class="metric__label">Speed</span>
+        <span class="metric__value">32 km/h</span>
+      </div>
+      <div class="metric">
+        <span class="metric__label">Heading</span>
+        <span class="metric__value">215° SW</span>
+      </div>
+    </div>
+
+    <div class="metrics">
+      <div class="metric">
+        <span class="metric__label">Doors</span>
+        <span class="metric__value">
+          <span class="door-indicator">
+            <span class="door-dot door-dot--closed"></span>
+            Closed
+          </span>
+        </span>
+      </div>
+      <div class="metric">
+        <span class="metric__label">Deviation</span>
+        <span class="metric__value metric__value--green">+12 s</span>
+      </div>
+    </div>
+
+    <div class="next-stop">
+      <span class="next-stop__label">Next stop</span>
+      <span class="next-stop__name">Eira</span>
+    </div>
+  </div>
+</div>
+</body>
+</html>

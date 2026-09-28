@@ -74,10 +74,16 @@ function toError(value: unknown): Error {
 }
 
 /** True when two snapshots would render identically. Only the fields the UI
- * displays are compared; a speed-only change does not re-render. Heading is
- * displayed on the map icons (TV-0008), so a heading-only change with an
- * otherwise frozen position - e.g. a tram reversing at a terminal layover -
- * must re-render so the icon follows. */
+ * displays are compared; a speed-only change does not re-render (a moving
+ * vehicle updates anyway through lat/lon, and a stopped one reports 0).
+ * Heading is displayed on the map icons (TV-0008), so a heading-only change
+ * with an otherwise frozen position - e.g. a tram reversing at a terminal
+ * layover - must re-render so the icon follows. TV-0023: the marker popup
+ * displays doors, schedule deviation, next stop, and headsign, so a change
+ * in any of them with an otherwise frozen position - the common case of a
+ * tram opening its doors at a stop - must re-render for the open popup to
+ * refresh (TramMarkerLayer.update refreshes it only when the snapshot
+ * changes). */
 function positionsEqual(a: TramPosition[], b: TramPosition[]): boolean {
   if (a === b) return true;
   if (a.length !== b.length) return false;
@@ -90,7 +96,11 @@ function positionsEqual(a: TramPosition[], b: TramPosition[]): boolean {
       x.routeShortName !== y.routeShortName ||
       x.lat !== y.lat ||
       x.lon !== y.lon ||
-      x.heading !== y.heading
+      x.heading !== y.heading ||
+      x.doorState !== y.doorState ||
+      x.scheduleDeviation !== y.scheduleDeviation ||
+      x.nextStopId !== y.nextStopId ||
+      x.headsign !== y.headsign
     ) {
       return false;
     }
@@ -194,6 +204,16 @@ export function useTramPositions(): TramPositionsState {
             routeShortName:
               resolveTramShortName(index, latest.routeId) ??
               resolveLiveTramTrip(key).routeShortName,
+            // TV-0023: map HFP fields to TramPosition fields.
+            doorState:
+              latest.drst === null
+                ? null
+                : (latest.drst & 1) !== 0
+                  ? "open"
+                  : "closed",
+            headsign: latest.headsign,
+            nextStopId: latest.stop !== null ? String(latest.stop) : null,
+            scheduleDeviation: latest.dl,
           });
         }
         const connected = connectedRef.current;

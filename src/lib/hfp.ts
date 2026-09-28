@@ -31,6 +31,16 @@ export interface HfpVehiclePosition {
   speed: number | null;
   /** Epoch milliseconds of the vehicle-reported position event. */
   receivedAt: number;
+  /** Door state bitfield as reported; bit 0 = doors open (TV-0023). */
+  drst: number | null;
+  /** HFP schedule deviation in seconds: positive = ahead of timetable,
+   * negative = behind (TV-0023). */
+  dl: number | null;
+  /** Stop id from the payload when present (about half of `vp` messages),
+   * else null (TV-0023). */
+  stop: number | null;
+  /** Destination/headsign text parsed from the HFP topic (TV-0023). */
+  headsign: string | null;
 }
 
 interface HfpVpPayload {
@@ -44,6 +54,9 @@ interface HfpVpPayload {
     lat?: number;
     long?: number;
     route?: string;
+    drst?: number;
+    dl?: number;
+    stop?: number;
   };
 }
 
@@ -81,6 +94,10 @@ export function parseHfpPosition(payload: string): HfpVehiclePosition | null {
     heading: typeof vp.hdg === "number" ? vp.hdg : null,
     speed: typeof vp.spd === "number" ? vp.spd : null,
     receivedAt,
+    drst: typeof vp.drst === "number" ? vp.drst : null,
+    dl: typeof vp.dl === "number" ? vp.dl : null,
+    stop: typeof vp.stop === "number" ? vp.stop : null,
+    headsign: null,
   };
 }
 
@@ -411,9 +428,16 @@ export function subscribeTramPositions(handlers: {
     HFP_MQTT_URL,
     TRAM_POSITION_TOPIC,
     {
-      onMessage: (_topic, payload) => {
+      onMessage: (topic, payload) => {
         const position = parseHfpPosition(payload);
-        if (position !== null) handlers.onPosition(position);
+        if (position !== null) {
+          // TV-0023: enrich the position with the headsign from the topic.
+          const topicParts = parseHfpTopic(topic);
+          if (topicParts !== null) {
+            position.headsign = topicParts.headsign;
+          }
+          handlers.onPosition(position);
+        }
       },
       onConnectionChange: (state) => {
         handlers.onConnectionChange(state === "connected");
