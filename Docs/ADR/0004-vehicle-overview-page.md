@@ -87,9 +87,10 @@ Option B.
    explicit "unknown vehicle" state instead of throwing or falling back
    silently. The route is honoured on load and on `hashchange`, so the
    browser's back/forward buttons and pasted links both work.
-3. **Entry point.** The existing marker popup keeps its TV-0016 debug readout
-   and gains exactly one navigation affordance to that vehicle's overview.
-   The overview supplies its own back control to the map.
+3. **Entry point.** The marker popup - a compact HUD dashboard since TV-0023,
+   which replaced the TV-0016 debug readout - gains exactly one navigation
+   affordance to that vehicle's overview. The overview supplies its own back
+   control to the map.
 4. **One data client at a time.** The overview owns the vehicle-scoped MQTT
    subscription; the map owns the network-wide one. Navigating closes the
    other, so exactly one connection is open at any moment (amendment to

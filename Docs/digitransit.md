@@ -55,16 +55,11 @@ number - even when its route resolves to no displayed line, where any other
 vehicle would show the red dot - plus its own legend entry; it never tallies
 into the MLNRV (category A) count the number ranges would otherwise give it.
 
-Debug route resolution (TV-0016): the one per-session line-metadata query
-also retains the raw GTFS route list (gtfsId, mode, shortName) alongside the
-filtered tram-line index (`src/lib/digitransit.ts`). The rendering logic
-never consults it; `resolveTramRouteDebug()` uses it - no extra request - so
-the marker popup can tell the index's conflated null-reasons apart: route
-absent from the GTFS route list, not TRAM mode, TRAM route without a GTFS
-shortName, or a shortName failing the tram-line criteria. The popup's
-live-trip rows (TV-0022) are the second half of the same readout: they show
-whether that fallback was consulted, what it answered (matched route and
-line, no live trip, or the failure reason) and how old its map is.
+TV-0023: the marker popup carries passenger-facing content only and no longer
+shows the TV-0016 debug route resolution. Nothing reads that resolution now:
+the raw GTFS route list the metadata query still retains, and
+`resolveTramRouteDebug()` (`src/lib/digitransit.ts`), have no caller - removing
+them is [TV-0024](../Tasks/TV-0024-retire-debug-route-plumbing.md).
 
 ## API key setup
 
@@ -223,26 +218,27 @@ is the explanation. `MAX_MAP_ZOOM` stays 19, which requests at most URL zoom 18
 (above that the service adds no detail); zoom levels 11-19 and the default
 center/zoom are unchanged.
 
-TV-0016: clicking or tapping a marker body opens a Leaflet popup bound to
+TV-0023: clicking or tapping a marker body opens a Leaflet popup bound to
 that marker (`src/map/TramMarkerPopup.ts`), so it follows the tram as it
-moves. It is the in-field diagnostic for the red-dot decision: identity
-(oper/veh key), fleet type and its source (vehicle-number range lookup vs
-the SpåraKoff special case, including what the range lookup alone would say
-for car #175), the full route resolution (raw HFP `routeId`, the `HSL:`
-GTFS key, membership in the tram-line index, the GTFS shortName, whether it
-passes `isTramLineShortName`, and the distinct null-reason when absent -
-route absent from GTFS / not TRAM mode / no GTFS shortName / shortName
-failing the line criteria), the live-trip input (whether it was consulted
-at all - it is not, when the raw route id resolves in the index - and, when
-it was, the matched `gtfsId`, route and line, or "no live trip" for this
-vehicle, or the lookup's failure reason, always with the age of the
-live-trip map), the line the snapshot actually shows, the
-computed offline boolean, a one-line red-dot verdict, and freshness
-(`receivedAt`, its age in seconds, and the staleness budget). The readout
-refreshes with every snapshot while open and closes by itself when the
-vehicle drops from the snapshot; one popup shows at a time, and closing is
-normal Leaflet behavior (× button, map click, Esc). It is presentation
-only: the popup reads the same state the markers render, never mutates it,
-and nothing is persisted. The native hover tooltip is untouched.
+moves. It is the passenger-facing HUD the user chose from the design round
+(Tasks/mockups/mockup-01-hud-dashboard.html): a line badge, the vehicle key
+over the GTFS route key, a headsign pill, speed and heading side by side,
+door state and schedule deviation side by side, and the next stop. It is
+drawn in a dark shell - Leaflet's popup chrome is restyled under the
+`tram-hud-shell` class - and it **replaced** the TV-0016 debug readout rather
+than joining it. The next stop is the id the HFP payload reports (`stop`),
+resolved against the stop names of the route's patterns (the same cached
+per-session query the vehicle overview's spine uses, via
+`loadRouteStopNames`); the bare id is the honest fallback until that load
+resolves and when it fails, and names are asked for only while a popup is
+open, once per route per session. Door state comes from `drst` bit 0, the
+deviation from `dl`, and the headsign from the HFP topic, all carried on the
+snapshot (`src/hooks/useTramPositions.ts`); a field the feed has not reported
+reads "—" rather than a guess. The readout refreshes with every snapshot
+while open and closes by itself when the vehicle drops from the snapshot; one
+popup shows at a time, and closing is normal Leaflet behavior (× button, map
+click, Esc). It is presentation only: the popup reads the same state the
+markers render, never mutates it, and nothing is persisted. The native hover
+tooltip is untouched.
 While the tab is hidden, the position stream and the one-second snapshot tick pause
 entirely and resume on focus, so a hidden tab pulls no feed traffic.
