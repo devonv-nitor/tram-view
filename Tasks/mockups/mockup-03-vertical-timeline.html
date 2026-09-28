@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Mockup 3 — Vertical timeline</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+    background: #f1f3f6;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+  }
+
+  .mockup {
+    width: 320px;
+    background: #ffffff;
+    border-radius: 14px;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.10);
+    overflow: hidden;
+  }
+
+  /* Hero — big line badge + vehicle identity side by side */
+  .hero {
+    display: flex;
+    align-items: center;
+    gap: 0.7rem;
+    padding: 0.9rem 1rem 0.7rem;
+    background: linear-gradient(135deg, #1b1e22 0%, #2d3138 100%);
+    color: #fff;
+  }
+  .hero__badge {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 48px;
+    height: 48px;
+    border-radius: 12px;
+    background: #fcb919;
+    color: #1a1a1a;
+    font-weight: 800;
+    font-size: 1.4rem;
+    flex: none;
+  }
+  .hero__info {
+    min-width: 0;
+  }
+  .hero__vehicle {
+    font-weight: 700;
+    font-size: 1rem;
+  }
+  .hero__gtfs {
+    color: #9ca0a8;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 0.7rem;
+  }
+  .hero__headsign {
+    margin-top: 0.15rem;
+    color: #b8bbc2;
+    font-size: 0.78rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* Timeline-style body */
+  .body {
+    padding: 0.6rem 1rem 0.9rem;
+  }
+
+  .timeline-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.65rem;
+    padding: 0.4rem 0;
+    position: relative;
+  }
+
+  .timeline-row__dot {
+    flex: none;
+    width: 10px;
+    height: 10px;
+    margin-top: 0.25rem;
+    border-radius: 50%;
+    background: #e3e6eb;
+    border: 2px solid #ffffff;
+    box-shadow: 0 0 0 1px #e3e6eb;
+  }
+  .timeline-row__dot--active {
+    background: #fcb919;
+    box-shadow: 0 0 0 1px #fcb919;
+  }
+  .timeline-row__dot--green { background: #1f7a4d; box-shadow: 0 0 0 1px #1f7a4d; }
+  .timeline-row__dot--red   { background: #b3261e; box-shadow: 0 0 0 1px #b3261e; }
+
+  /* Rail line connecting dots */
+  .timeline-row::after {
+    content: '';
+    position: absolute;
+    left: 4px;
+    top: 1.1rem;
+    width: 2px;
+    height: calc(100% - 0.3rem);
+    background: #e3e6eb;
+  }
+  .timeline-row:last-child::after {
+    display: none;
+  }
+
+  .timeline-row__content {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0.5rem;
+  }
+  .timeline-row__label {
+    color: #5a6169;
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  .timeline-row__value {
+    color: #1b1e22;
+    font-weight: 600;
+    font-size: 0.85rem;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    text-align: right;
+  }
+  .timeline-row__value--green { color: #1f7a4d; }
+  .timeline-row__value--red   { color: #b3261e; }
+  .timeline-row__value--amber { color: #a15c00; }
+
+  /* Next stop: prominent */
+  .next-stop-row {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    padding: 0.65rem 1rem;
+    background: #f7f8fa;
+    border-top: 1px solid #e3e6eb;
+  }
+  .next-stop-row__icon {
+    flex: none;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: #fcb919;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1rem;
+  }
+  .next-stop-row__info {
+    flex: 1;
+    min-width: 0;
+  }
+  .next-stop-row__label {
+    color: #5a6169;
+    font-size: 0.65rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .next-stop-row__name {
+    font-weight: 700;
+    font-size: 1.05rem;
+    color: #1b1e22;
+  }
+  .next-stop-row__eta {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 0.78rem;
+    color: #5a6169;
+  }
+</style>
+</head>
+<body>
+<div class="mockup">
+  <div class="hero">
+    <span class="hero__badge">5</span>
+    <div class="hero__info">
+      <div class="hero__vehicle">40/450</div>
+      <div class="hero__gtfs">HSL:1005</div>
+      <div class="hero__headsign">→ Katajanokka</div>
+    </div>
+  </div>
+
+  <div class="body">
+    <div class="timeline-row">
+      <span class="timeline-row__dot timeline-row__dot--green"></span>
+      <div class="timeline-row__content">
+        <span class="timeline-row__label">Speed</span>
+        <span class="timeline-row__value">32 km/h · 215°</span>
+      </div>
+    </div>
+    <div class="timeline-row">
+      <span class="timeline-row__dot"></span>
+      <div class="timeline-row__content">
+        <span class="timeline-row__label">Doors</span>
+        <span class="timeline-row__value timeline-row__value--green">Closed</span>
+      </div>
+    </div>
+    <div class="timeline-row">
+      <span class="timeline-row__dot timeline-row__dot--active"></span>
+      <div class="timeline-row__content">
+        <span class="timeline-row__label">Deviation</span>
+        <span class="timeline-row__value timeline-row__value--green">+12 s</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="next-stop-row">
+    <span class="next-stop-row__icon">⬇</span>
+    <div class="next-stop-row__info">
+      <span class="next-stop-row__label">Next stop</span>
+      <span class="next-stop-row__name">Eira</span>
+    </div>
+    <div class="next-stop-row__eta">+12 s</div>
+  </div>
+</div>
+</body>
+</html>

@@ -106,6 +106,14 @@ export function formatSpeed(metersPerSecond: number | null): string {
   return `${metersPerSecond.toFixed(1)} m/s · ${Math.round(metersPerSecond * 3.6)} km/h`;
 }
 
+/** Speed in km/h only - the passenger-facing reading for the map popup
+ * (TV-0023). formatSpeed keeps the reported m/s for the overview, where the
+ * raw unit matters. */
+export function formatSpeedKmh(metersPerSecond: number | null): string {
+  if (metersPerSecond === null || !Number.isFinite(metersPerSecond)) return "—";
+  return `${Math.round(metersPerSecond * 3.6)} km/h`;
+}
+
 /** Acceleration as reported, m/s². */
 export function formatAcceleration(acceleration: number | null): string {
   if (acceleration === null || !Number.isFinite(acceleration)) return "—";
@@ -113,14 +121,34 @@ export function formatAcceleration(acceleration: number | null): string {
   return `${sign}${acceleration.toFixed(2)} m/s²`;
 }
 
+const COMPASS_POINTS = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"];
+
+/** The rounded degrees and compass octant for a heading, or null when there
+ * is no heading. The octant is a reading aid for a number; it is not
+ * reported by the feed. */
+function compassRead(
+  heading: number | null,
+): { degrees: number; octant: string } | null {
+  if (heading === null || !Number.isFinite(heading)) return null;
+  const normalized = ((heading % 360) + 360) % 360;
+  return {
+    degrees: Math.round(normalized),
+    octant: COMPASS_POINTS[Math.round(normalized / 45) % 8],
+  };
+}
+
 /** Heading in degrees with the compass octant the HFP value implies. The
  * octant is a reading aid for a number; it is not reported by the feed. */
 export function formatHeading(heading: number | null): string {
-  if (heading === null || !Number.isFinite(heading)) return "—";
-  const points = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"];
-  const normalized = ((heading % 360) + 360) % 360;
-  const octant = points[Math.round(normalized / 45) % 8];
-  return `${Math.round(normalized)}° (${octant})`;
+  const read = compassRead(heading);
+  return read === null ? "—" : `${read.degrees}° (${read.octant})`;
+}
+
+/** Heading without the parentheses - the compact form the map popup's HUD
+ * uses (TV-0023: "215° SW"). Same rule as formatHeading. */
+export function formatHeadingCompact(heading: number | null): string {
+  const read = compassRead(heading);
+  return read === null ? "—" : `${read.degrees}° ${read.octant}`;
 }
 
 /** Door state from `drst` bit 0 plus whether the bit is all we know. */

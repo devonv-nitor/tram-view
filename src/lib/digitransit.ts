@@ -8,6 +8,8 @@
  * stays the single owner of how it is read, and no key value is ever logged.
  */
 
+import { bareStopId } from "./journey.ts";
+
 const ROUTING_GRAPHQL_ENDPOINT =
   "https://api.digitransit.fi/routing/v2/hsl/gtfs/v1";
 
@@ -53,6 +55,16 @@ export interface TramPosition {
   speed: number | null;
   /** Epoch milliseconds of the vehicle-reported position event. */
   receivedAt: number;
+  /** Door state: "open" when bit 0 of drst is set, "closed" when clear,
+   * null when drst was not reported (TV-0023). */
+  doorState: "open" | "closed" | null;
+  /** Destination/headsign text from the HFP topic (TV-0023). */
+  headsign: string | null;
+  /** Next-stop id from the HFP topic (TV-0023). */
+  nextStopId: string | null;
+  /** HFP schedule deviation in seconds: positive = ahead of timetable,
+   * negative = behind (TV-0023). */
+  scheduleDeviation: number | null;
 }
 
 interface TramRoutesData {
@@ -606,4 +618,38 @@ async function fetchRoutePatterns(
       (position) => position.vehicleId,
     ),
   }));
+}
+
+const routeStopNamesCache = new Map<string, Promise<Map<string, string>>>();
+
+/** Bare HFP stop id -> stop name for one route, built from every pattern of
+ * the route and cached per session per route. TV-0023: the marker popup's
+ * next-stop row resolves the id the HFP payload reports against the same
+ * pattern stop lists the vehicle overview's spine uses. Reuses
+ * `loadRoutePatterns`, so a route's patterns are fetched once per session
+ * whichever caller asks first. Rejects are retryable like
+ * `loadRoutePatterns`; an empty map means the route has no patterns, so
+ * nothing can be named and the caller keeps the bare id. */
+export function loadRouteStopNames(
+  routeId: string,
+  apiKey?: string,
+): Promise<Map<string, string>> {
+  const cached = routeStopNamesCache.get(routeId);
+  if (cached !== undefined) return cached;
+  const promise = loadRoutePatterns(routeId, apiKey).then((patterns) => {
+    const names = new Map<string, string>();
+    for (const pattern of patterns) {
+      for (const stop of pattern.stops) {
+        names.set(bareStopId(stop.gtfsId), stop.name);
+      }
+    }
+    return names;
+  });
+  routeStopNamesCache.set(routeId, promise);
+  promise.catch(() => {
+    if (routeStopNamesCache.get(routeId) === promise) {
+      routeStopNamesCache.delete(routeId);
+    }
+  });
+  return promise;
 }

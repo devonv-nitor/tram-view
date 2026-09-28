@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Mockup 5 — Transit-board split panel</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+    background: #0d0f12;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+  }
+
+  .mockup {
+    width: 320px;
+    background: #13161b;
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow: 0 8px 40px rgba(0,0,0,0.5);
+    border: 1px solid #262a30;
+  }
+
+  /* === TOP HALF: the "announcement board" === */
+  .board {
+    background: #0a0c10;
+    padding: 0.8rem 1rem 0.6rem;
+    border-bottom: 2px solid #fcb919;
+  }
+
+  .board__line-row {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    margin-bottom: 0.5rem;
+  }
+  .board__line {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    border-radius: 10px;
+    background: #fcb919;
+    color: #1a1a1a;
+    font-weight: 800;
+    font-size: 1.35rem;
+    box-shadow: 0 0 12px rgba(252,185,25,0.25);
+  }
+  .board__headsign {
+    color: #e0e2e6;
+    font-weight: 600;
+    font-size: 1.1rem;
+    letter-spacing: 0.01em;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .board__headsign-dest {
+    color: #6b7078;
+    font-weight: 400;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+
+  .board__vehicle-row {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.4rem 0 0.2rem;
+    border-top: 1px solid #1e2228;
+  }
+  .board__key {
+    color: #6b7078;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 0.78rem;
+  }
+  .board__key-strong {
+    color: #e0e2e6;
+    font-weight: 600;
+    font-size: 0.85rem;
+  }
+  .board__gtfs {
+    color: #6b7078;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 0.68rem;
+  }
+
+  /* === BOTTOM HALF: live telemetry split === */
+  .telemetry {
+    padding: 0.7rem 1rem 0.9rem;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.5rem;
+  }
+
+  .tile {
+    background: #1a1d23;
+    border-radius: 10px;
+    padding: 0.5rem 0.6rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+  }
+  .tile--full {
+    grid-column: 1 / -1;
+    flex-direction: row;
+    text-align: left;
+    gap: 0.6rem;
+    padding: 0.6rem 0.75rem;
+  }
+
+  .tile__icon {
+    font-size: 1rem;
+    margin-bottom: 0.2rem;
+    line-height: 1;
+  }
+  .tile--full .tile__icon {
+    margin-bottom: 0;
+    font-size: 1.3rem;
+  }
+
+  .tile__label {
+    color: #6b7078;
+    font-size: 0.6rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-bottom: 0.1rem;
+  }
+  .tile__value {
+    color: #e0e2e6;
+    font-weight: 700;
+    font-size: 1rem;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-variant-numeric: tabular-nums;
+  }
+  .tile__value--green { color: #34d399; }
+  .tile__value--red   { color: #f87171; }
+  .tile__value--amber { color: #fbbf24; }
+
+  .tile__sub {
+    color: #6b7078;
+    font-size: 0.6rem;
+    margin-top: 0.05rem;
+  }
+
+  /* Door state as a pill */
+  .door-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.15rem 0.55rem;
+    border-radius: 999px;
+    font-size: 0.8rem;
+    font-weight: 700;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  .door-pill--open {
+    background: #064e3b;
+    color: #34d399;
+  }
+  .door-pill--closed {
+    background: #1e2228;
+    color: #9ca0a8;
+  }
+  .door-pill__dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+  }
+  .door-pill--open .door-pill__dot  { background: #34d399; box-shadow: 0 0 4px #34d399; }
+  .door-pill--closed .door-pill__dot { background: #6b7078; }
+
+  /* Next stop tile */
+  .next-stop {
+    flex: 1;
+  }
+  .next-stop__name {
+    color: #e0e2e6;
+    font-weight: 700;
+    font-size: 1rem;
+  }
+  .next-stop__dl {
+    color: #6b7078;
+    font-size: 0.7rem;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  .next-stop__eta {
+    text-align: right;
+  }
+  .next-stop__eta-label {
+    color: #6b7078;
+    font-size: 0.6rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+  .next-stop__eta-value {
+    color: #e0e2e6;
+    font-weight: 700;
+    font-size: 0.85rem;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+</style>
+</head>
+<body>
+<div class="mockup">
+  <!-- Top: board -->
+  <div class="board">
+    <div class="board__line-row">
+      <span class="board__line">5</span>
+      <div>
+        <div class="board__headsign">Katajanokka</div>
+        <div class="board__headsign-dest">via Eira · Tehtaankatu</div>
+      </div>
+    </div>
+    <div class="board__vehicle-row">
+      <span>
+        <span class="board__key-strong">40/450</span>
+        <span class="board__key"> · </span>
+        <span class="board__gtfs">HSL:1005</span>
+      </span>
+    </div>
+  </div>
+
+  <!-- Bottom: telemetry tiles -->
+  <div class="telemetry">
+    <div class="tile">
+      <span class="tile__icon">🚄</span>
+      <span class="tile__label">Speed</span>
+      <span class="tile__value">32 km/h</span>
+      <span class="tile__sub">8.9 m/s</span>
+    </div>
+    <div class="tile">
+      <span class="tile__icon">🧭</span>
+      <span class="tile__label">Heading</span>
+      <span class="tile__value">215°</span>
+      <span class="tile__sub">SW</span>
+    </div>
+    <div class="tile">
+      <span class="tile__icon">🚪</span>
+      <span class="tile__label">Doors</span>
+      <span class="tile__value">
+        <span class="door-pill door-pill--closed">
+          <span class="door-pill__dot"></span>
+          Closed
+        </span>
+      </span>
+    </div>
+    <div class="tile">
+      <span class="tile__icon">⏱</span>
+      <span class="tile__label">Deviation</span>
+      <span class="tile__value tile__value--green">+12 s</span>
+      <span class="tile__sub">ahead</span>
+    </div>
+
+    <div class="tile tile--full">
+      <span class="tile__icon">⬇</span>
+      <div class="next-stop">
+        <span class="tile__label">Next stop</span>
+        <span class="next-stop__name">Eira</span>
+        <span class="next-stop__dl">+12 s ahead of schedule</span>
+      </div>
+      <div class="next-stop__eta">
+        <span class="next-stop__eta-label">Est. arrival</span>
+        <span class="next-stop__eta-value">14:32</span>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

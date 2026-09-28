@@ -12,12 +12,14 @@
  * and heading rotation and shows a red not-in-service dot in place of the
  * line number. The marker layer consumes `routeShortName` only: which source
  * resolved it is the hooks' and the popup's business, never this file's.
- * TV-0016: clicking/tapping a marker body opens a Leaflet popup bound to
- * the marker - it follows the tram, refreshes its debug readout (every
- * input to the red-dot decision) on every snapshot in the same per-marker
- * pass, closes when the vehicle drops from the snapshot, and shows one
- * popup at a time (src/map/TramMarkerPopup.ts builds the content; the
- * rendering decisions never consult it).
+ * TV-0016/TV-0023: clicking/tapping a marker body opens a Leaflet popup bound
+ * to the marker - it follows the tram, refreshes its readout on every
+ * snapshot in the same per-marker pass, closes when the vehicle drops from
+ * the snapshot, and shows one popup at a time (src/map/TramMarkerPopup.ts
+ * builds the content; the rendering decisions never consult it). TV-0023: the
+ * popup's next stop is the id the HFP payload reports resolved against the
+ * route's pattern stop names, which are asked for only while a popup is open
+ * and only once per route per session.
  * Direction source and live evidence (Tasks/TV-0008-tram-direction.md): the
  * HFP `hdg` field the payload already carries - verified live to match the
  * direction of travel and to persist for stopped vehicles - so no extra
@@ -36,7 +38,7 @@
  * created/removed as vehicles enter and leave the filtered feed.
  */
 import L from "leaflet";
-import type { TramPosition } from "../lib/digitransit.ts";
+import { loadRouteStopNames, type TramPosition } from "../lib/digitransit.ts";
 import {
   isSparakoffBarTram,
   SPARAKOFF_MARKER_LETTER,
@@ -44,7 +46,7 @@ import {
   type TramCategoryInfo,
 } from "../lib/fleet.ts";
 import { vehicleKey } from "../lib/hfp.ts";
-import { buildTramDebugHtml } from "./TramMarkerPopup.ts";
+import { buildTramPopupHtml } from "./TramMarkerPopup.ts";
 
 /** Marker body diameter in px; the line label sits centered inside the
  * rounded body and the teardrop point extends beyond it in the heading
@@ -153,9 +155,16 @@ export class TramMarkerLayer {
   private readonly markers = new Map<string, L.Marker>();
   /** TV-0016: the latest snapshot position per vehicle, kept so the popup
    * can be rebuilt from the current state on click and refreshed on every
-   * snapshot. Read-only debug state - the popup never mutates it, and the
+   * snapshot. Read-only popup state - the popup never mutates it, and the
    * rendering decisions keep using the update() argument alone. */
   private readonly latestPositions = new Map<string, TramPosition>();
+  /** TV-0023: bare HFP stop id -> stop name per route, filled lazily from the
+   * route's patterns the first time an open popup needs one. Only the open
+   * popup ever triggers a lookup, so an unopened map asks for nothing. */
+  private readonly stopNamesByRoute = new Map<string, Map<string, string>>();
+  /** Route ids whose stop-name request is still in flight, so one open popup
+   * asks at most once per route while waiting. */
+  private readonly stopNamesPending = new Set<string>();
 
   constructor(private readonly map: L.Map) {
     // The markers show line numbers only; the data itself is surfaced in the
@@ -166,7 +175,7 @@ export class TramMarkerLayer {
   /** Syncs the layer to one snapshot: moves existing markers in place, adds
    * vehicles new to the feed, removes vehicles that disappeared, and
    * refreshes the icon (heading rotation and label) of vehicles that
-   * changed. TV-0016: the open popup's debug readout refreshes in the same
+   * changed. TV-0016: the open popup's readout refreshes in the same
    * per-marker pass - no second render path. */
   update(positions: TramPosition[]): void {
     const present = new Set<string>();
@@ -185,18 +194,18 @@ export class TramMarkerLayer {
           interactive: false,
           keyboard: false,
         }).addTo(this.map);
-        this.bindDebugPopup(key, created, position);
+        this.bindTramPopup(key, created, position);
         this.markers.set(key, created);
       } else {
         marker.setLatLng([position.lat, position.lon]);
         this.syncIcon(marker, position);
-        // TV-0016: the tram keeps moving, so stale debug info is worse than
+        // TV-0016: the tram keeps moving, so stale info is worse than
         // none - refresh the open popup's readout with this snapshot in the
         // same per-marker pass. Markers move via setLatLng, which Leaflet's
         // bindPopup hooks ('move' event) to keep the popup anchored to the
         // marker, not to a map point.
         if (marker.isPopupOpen()) {
-          marker.setPopupContent(buildTramDebugHtml(position));
+          marker.setPopupContent(this.popupHtml(position));
         }
       }
       this.latestPositions.set(key, position);
@@ -210,41 +219,115 @@ export class TramMarkerLayer {
     }
   }
 
-  /** TV-0016: binds the debug popup to the marker (not a map point) and
+  /** TV-0016: binds the popup to the marker (not a map point) and
    * opens it on a real click/tap on the marker body. Leaflet's own click
    * handling stays off (interactive: false is untouched - the markers keep
    * zero Leaflet event targets); the popup opens from this listener instead,
    * and stopPropagation keeps the click from bubbling to the map container,
    * where the default close-on-map-click would instantly close it. The
    * readout is rebuilt from the latest snapshot at open time, so it is
-   * fresh even after the popup sat unopened. */
-  private bindDebugPopup(
+   * fresh even after the popup sat unopened. The initial content carries no
+   * stop name: names are resolved only for an open popup, so creating ~150
+   * markers asks the API for nothing (TV-0023). */
+  private bindTramPopup(
     key: string,
     marker: L.Marker,
     position: TramPosition,
   ): void {
-    marker.bindPopup(buildTramDebugHtml(position));
+    marker.bindPopup(buildTramPopupHtml(position), {
+      // TV-0023: the dark HUD shell is scoped by this class so Leaflet's
+      // default light popup chrome is restyled for this one popup type only
+      // (see index.css). Width is clamped here because Leaflet writes the
+      // width onto its content node, so CSS max-width cannot constrain it.
+      className: "tram-hud-shell",
+      minWidth: 260,
+      maxWidth: 300,
+    });
     marker.getElement()?.addEventListener("click", (event) => {
       event.stopPropagation();
-      this.openDebugPopup(key);
+      this.openTramPopup(key);
     });
   }
 
-  /** TV-0016: opens (or re-targets) the one debug popup for a vehicle.
+  /** TV-0016: opens (or re-targets) the one popup for a vehicle.
    * Leaflet's map keeps a single popup: opening one marker's popup closes
    * any other, so clicking a different marker rewrites it. Content is
-   * rebuilt first from the latest snapshot; an already-open popup is left
-   * open (no close/reopen flicker, no re-pan) - its content refreshes on
-   * every snapshot in update(). The popup closes by itself when the vehicle
-   * drops from the snapshot: bindPopup closes it on the marker's 'remove'
-   * event. */
-  private openDebugPopup(key: string): void {
+   * rebuilt first from the latest snapshot (resolving the next stop's name
+   * when the route's patterns are already loaded, and starting that load
+   * otherwise - TV-0023); an already-open popup is left open (no
+   * close/reopen flicker, no re-pan) - its content refreshes on every
+   * snapshot in update(). The popup closes by itself when the vehicle drops
+   * from the snapshot: bindPopup closes it on the marker's 'remove' event. */
+  private openTramPopup(key: string): void {
     const marker = this.markers.get(key);
     const position = this.latestPositions.get(key);
     if (marker === undefined || position === undefined) return;
-    marker.setPopupContent(buildTramDebugHtml(position));
+    marker.setPopupContent(this.popupHtml(position));
     if (marker.isPopupOpen()) return;
     marker.openPopup();
+  }
+
+  /** Popup HTML for one position, carrying the next stop's name when this
+   * layer already resolved the route's pattern stop names (TV-0023), and the
+   * bare id until then. A name the layer does not have yet starts the
+   * route's one shared load; `refreshOpenPopups` rewrites the open popup when
+   * it resolves. */
+  private popupHtml(position: TramPosition): string {
+    return buildTramPopupHtml(position, this.nextStopName(position));
+  }
+
+  /** The next stop's name for one position, or null while it is unknown.
+   * A miss is not an error: the popup keeps the bare HFP id, which is the
+   * design's honest fallback, and a retry happens the next time a popup on
+   * that route opens. */
+  private nextStopName(position: TramPosition): string | null {
+    if (position.nextStopId === null) return null;
+    const names = this.stopNamesByRoute.get(position.routeId);
+    if (names !== undefined) {
+      return names.get(position.nextStopId) ?? null;
+    }
+    this.ensureStopNames(position.routeId);
+    return null;
+  }
+
+  /** Loads one route's stop names once, then rewrites the open popup so the
+   * next-stop row picks the name up without waiting for a snapshot. */
+  private ensureStopNames(routeId: string): void {
+    if (
+      this.stopNamesByRoute.has(routeId) ||
+      this.stopNamesPending.has(routeId)
+    ) {
+      return;
+    }
+    this.stopNamesPending.add(routeId);
+    void loadRouteStopNames(routeId)
+      .then((names) => {
+        this.stopNamesByRoute.set(routeId, names);
+        this.stopNamesPending.delete(routeId);
+        this.refreshOpenPopups();
+      })
+      .catch((cause: unknown) => {
+        this.stopNamesPending.delete(routeId);
+        // A failed lookup changes nothing on screen (the row keeps the bare
+        // id), so it is logged once per attempt and never escalated.
+        console.warn(
+          "[tram-view] stop names failed:",
+          cause instanceof Error ? cause.message : String(cause),
+        );
+      });
+  }
+
+  /** Rewrites the content of the one open popup. Leaflet keeps a single map
+   * popup, so at most one marker reports it open; the loop is ~150 cheap
+   * checks and keeps no separate "which popup is open" state to go stale. */
+  private refreshOpenPopups(): void {
+    for (const [key, marker] of this.markers) {
+      if (!marker.isPopupOpen()) continue;
+      const position = this.latestPositions.get(key);
+      if (position !== undefined) {
+        marker.setPopupContent(this.popupHtml(position));
+      }
+    }
   }
 
   /** Updates one existing marker's icon DOM in place: the rotor rotation
@@ -309,5 +392,7 @@ export class TramMarkerLayer {
     }
     this.markers.clear();
     this.latestPositions.clear();
+    this.stopNamesByRoute.clear();
+    this.stopNamesPending.clear();
   }
 }
