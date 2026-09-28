@@ -742,3 +742,112 @@ export function loadRouteStopNames(
   });
   return promise;
 }
+
+/**
+ * TV-0019: the tram line overlay's geometry query (ADR-0001 overlay
+ * amendment): every pattern of every tram route, one query per **session** -
+ * the map page's own layer draws the whole network shape from it, and the
+ * vehicle overview page (ADR-0004) initiates no overlay request. `geometry`
+ * is the planned pattern shape as `[Coordinates] {lat, lon}` objects, not an
+ * encoded polyline. The `transportModes: [TRAM]` filter is the scope filter:
+ * every returned pattern is drawn, with no deduplication into one geometry
+ * per displayed short name and no simplification (the accepted decision) -
+ * the app's `isTramLineShortName` display filter is deliberately not applied
+ * here, and a returned short name outside the displayed set is reported to
+ * the caller as-is rather than filtered away.
+ */
+const TRAM_NETWORK_GEOMETRY_QUERY = `
+  query TramNetworkGeometry {
+    routes(transportModes: [TRAM]) {
+      gtfsId
+      shortName
+      patterns {
+        directionId
+        geometry {
+          lat
+          lon
+        }
+      }
+    }
+  }
+`;
+
+/** One pattern's drawable shape: the direction it serves and the ordered
+ * coordinates the API reports for it. */
+export interface TramPatternGeometry {
+  /** GTFS direction id: 0-based (ADR-0002 amendment). One polyline is drawn
+   * per pattern, so patterns sharing a direction (short-turn and service
+   * variants) are separate drawn geometries that coincide where the track is
+   * shared. */
+  directionId: number;
+  /** The pattern's ordered shape coordinates - real lat/lon objects, not an
+   * encoded polyline. Empty when the API returned no coordinates for the
+   * pattern. */
+  coordinates: { lat: number; lon: number }[];
+}
+
+/** One tram route's drawable patterns: the route identity (the per-pattern
+ * attribution) and every pattern's shape. */
+export interface TramRouteGeometry {
+  gtfsId: string;
+  /** The GTFS short name, or null. Kept as the API reports it and never used
+   * to filter the pattern set (the accepted "every pattern" decision). */
+  shortName: string | null;
+  patterns: TramPatternGeometry[];
+}
+
+interface TramNetworkGeometryData {
+  routes: {
+    gtfsId: string;
+    shortName: string | null;
+    patterns: {
+      directionId: number;
+      geometry: { lat: number; lon: number }[] | null;
+    }[];
+  }[];
+}
+
+let tramNetworkGeometryPromise: Promise<TramRouteGeometry[]> | null = null;
+
+/** Loads every tram route pattern's geometry for the map page's overlay
+ * (TV-0019), cached at module level for the session: one request per session
+ * whichever callers ask - no refetch on pan, zoom, popup open/close, marker
+ * updates, or returning from the vehicle page, and no polling. The map page
+ * (src/map/TramLineOverlay.ts) is the only caller; the vehicle overview page
+ * (ADR-0004) initiates no overlay request. The caller supplies the app's
+ * existing key and renders the outcome as lines or no lines - failures
+ * reject rather than throw synchronously, clear the cache so a later session
+ * can retry, and are never wired into the marker pipeline's error handling. */
+export function loadTramNetworkGeometry(
+  apiKey?: string,
+): Promise<TramRouteGeometry[]> {
+  tramNetworkGeometryPromise ??= fetchTramNetworkGeometry(apiKey);
+  tramNetworkGeometryPromise.catch(() => {
+    tramNetworkGeometryPromise = null;
+  });
+  return tramNetworkGeometryPromise;
+}
+
+async function fetchTramNetworkGeometry(
+  apiKey: string | undefined,
+): Promise<TramRouteGeometry[]> {
+  const data = await graphQlRequest<TramNetworkGeometryData>(
+    TRAM_NETWORK_GEOMETRY_QUERY,
+    apiKey ?? getDigitransitApiKey(),
+  );
+  // The feed is untrusted input: keep every coordinate the API reports for a
+  // pattern (the decision draws every point - no simplification, no
+  // coordinate dropping) and validate nothing but their types.
+  return data.routes.map((route) => ({
+    gtfsId: route.gtfsId,
+    shortName: route.shortName,
+    patterns: route.patterns.map((pattern) => ({
+      directionId: pattern.directionId,
+      coordinates: (pattern.geometry ?? []).filter(
+        (coordinate) =>
+          typeof coordinate.lat === "number" &&
+          typeof coordinate.lon === "number",
+      ),
+    })),
+  }));
+}

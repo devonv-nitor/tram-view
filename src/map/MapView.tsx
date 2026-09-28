@@ -4,6 +4,7 @@ import "leaflet/dist/leaflet.css";
 import type { TramPosition } from "../lib/digitransit.ts";
 import { tryGetDigitransitApiKey } from "../lib/digitransit.ts";
 import { TramMarkerLayer } from "./TramMarkers";
+import { TramLineOverlay } from "./TramLineOverlay";
 import {
   DEFAULT_MAP_ZOOM,
   HELSINKI_TRAM_NETWORK_CENTER,
@@ -20,11 +21,14 @@ import {
  * Basemap per the Docs/ADR/0001-map-library.md amendment: Leaflet + the
  * Digitransit Map API's `hsl-map` tiles (TV-0018), which need the same
  * subscription key as the line-metadata query. Live tram markers (TV-0005)
- * are managed imperatively in TramMarkerLayer, above the basemap.
+ * are managed imperatively in TramMarkerLayer, above the basemap, and the
+ * tram line overlay (TV-0019, ADR-0001 overlay amendment) in TramLineOverlay
+ * sits between the two: above the basemap, below the markers.
  */
 export default function MapView({ positions }: { positions: TramPosition[] }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const markersRef = useRef<TramMarkerLayer | null>(null);
+  const overlayRef = useRef<TramLineOverlay | null>(null);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -51,6 +55,13 @@ export default function MapView({ positions }: { positions: TramPosition[] }) {
         minZoom: MIN_MAP_ZOOM,
         maxZoom: MAX_MAP_ZOOM,
       }).addTo(map);
+      // TV-0019: the tram line overlay rides one session-cached Routing API
+      // request (ADR-0001 overlay amendment), asked for only here on the map
+      // page; with no key there is no basemap and no overlay request - both
+      // degrade to nothing, nothing throws.
+      const overlay = new TramLineOverlay(map);
+      overlayRef.current = overlay;
+      overlay.load(subscriptionKey);
     }
 
     markersRef.current = new TramMarkerLayer(map);
@@ -65,6 +76,8 @@ export default function MapView({ positions }: { positions: TramPosition[] }) {
 
     return () => {
       resizeObserver.disconnect();
+      overlayRef.current?.dispose();
+      overlayRef.current = null;
       markersRef.current?.dispose();
       markersRef.current = null;
       map.remove();

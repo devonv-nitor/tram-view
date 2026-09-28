@@ -10,6 +10,7 @@ polling) is recorded in
 | Data | Transport | API key |
 | ---- | --------- | ------- |
 | Map basemap (HSL's generic map style, no transit geometry) | Digitransit Map API raster tiles, `GET https://cdn.digitransit.fi/map/v3/hsl-map/{z}/{x}/{y}{r}.png?digitransit-subscription-key=<key>` (512 px tiles, CDN-cached 7 days; TV-0018) | required |
+| Tram line overlay (every pattern of every tram route, as map geometry) | Routing API v2 GraphQL, `POST https://api.digitransit.fi/routing/v2/hsl/gtfs/v1`, query `routes(transportModes: [TRAM]) { gtfsId shortName patterns { directionId geometry { lat lon } } }`, fetched once per session and cached; map page only, drawn above the basemap and below the markers (TV-0019) | required |
 | Tram vehicle positions (lat/lon, heading, speed, direction, route id, vehicle number) | HFP MQTT over WebSockets, `wss://mqtt.hsl.fi:443/`, topic `/hfp/v2/journey/ongoing/vp/tram/#` (push, ~1 update/s per vehicle) | not needed |
 | Tram line metadata (route id -> short name, mode) | Routing API v2 GraphQL, `POST https://api.digitransit.fi/routing/v2/hsl/gtfs/v1`, query `routes { gtfsId shortName mode }`, fetched once per session and cached | required |
 | One vehicle's full HFP event stream (position, stop events, doors, traffic-light priority) | same MQTT broker, filter `/hfp/v2/journey/ongoing/+/tram/<oper>/<veh>/#` - one vehicle, every event type (TV-0017) | not needed |
@@ -295,3 +296,30 @@ MQTT subscription, no new dependency (verified live 2026-09-28: the
 WebSocket connection count does not change across popup opens).
 While the tab is hidden, the position stream and the one-second snapshot tick pause
 entirely and resume on focus, so a hidden tab pulls no feed traffic.
+
+TV-0019: the map page draws the tram network as its own layer between the
+basemap and the markers (the stacking, styling and one-request-per-session
+decision are the
+[ADR 0001 overlay amendment](./ADR/0001-map-library.md#amendment-tram-line-overlay-on-the-basemap)).
+One polyline is drawn per `(route, directionId)` pattern the overlay query
+returns - every pattern, with no deduplication into one geometry per displayed
+short name and no simplification - and the geometry is the *planned* pattern
+shape from GTFS, so two directions of a line coincide where the track is
+shared. The look is HSL's own tram rendering: a wider white casing polyline
+under a narrower HSL tram green (`#00985F`); Leaflet has no casing option, so
+the ordering is draw order within one pane - all casing polylines first, then
+all green ones - with the per-zoom widths stated in `src/map/constants.ts`
+(`tramLineWidths`). The layer lives in its own non-interactive pane
+(`pointer-events: none`, z-index 350 between the tile pane's 200 and the
+marker pane's 600; `src/map/TramLineOverlay.ts`), so markers, popups and the
+status panel stay on top and clickable. The geometry rides one session-cached
+request (`loadTramNetworkGeometry`, `src/lib/digitransit.ts`, next to the
+line-metadata query), asked for only by the map page - the vehicle overview
+initiates no overlay request - and it uses the same key as the basemap tiles:
+with no key there is no basemap and no overlay request, and a failed request
+contributes no lines and changes nothing else (logged once, never escalated to
+the data client's error state). Measured live 2026-09-28: HTTP 200, 31 routes /
+150 patterns / 25 319 coordinates, 861 404 bytes uncompressed (93 714 B
+transferred gzipped), matching the amendment's 2026-09-25 probe. The response
+carries no service-date or freshness field, so the overlay is as fresh as the
+GTFS the Routing API serves at request time.

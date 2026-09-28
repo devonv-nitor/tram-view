@@ -1,6 +1,6 @@
 ---
 id: TV-0019
-status: READY
+status: REVIEW
 owner: agent
 gatekeeper: human
 required_approvals: []
@@ -131,3 +131,123 @@ lines 1-15 and the variants (`10B`, `10H`, `11H`, `13H`, `1H`, `1T`, `2H`,
   base.
 
 ## Handoff (status: REVIEW → DONE — optional, delete before merge)
+
+### Implementation
+
+- `src/lib/digitransit.ts`: `loadTramNetworkGeometry()` +
+  `TRAM_NETWORK_GEOMETRY_QUERY` (added at the end of the file, after
+  `loadRouteStopNames` — additive and local for TV-0024), typed as
+  `TramRouteGeometry[]` / `TramPatternGeometry[]`. Cached at module level with
+  the `??=`-promise pattern of `loadTramRouteIndex` (one request per session;
+  a failure clears the cache so a later session can retry). The feed is
+  untrusted input: coordinates are validated by type only, nothing simplified
+  or dropped, and `shortName` is kept as reported and never used to filter the
+  pattern set. `isTramLineShortName` is deliberately not applied (requirement
+  2).
+- `src/map/constants.ts`: `TRAM_OVERLAY_PANE` ("tramLineOverlay"),
+  `TRAM_OVERLAY_PANE_Z_INDEX` (350 — between `tilePane` 200 and
+  `markerPane` 600), `TRAM_LINE_COLOR` `#00985F`, `TRAM_LINE_CASING_COLOR`
+  `#FFFFFF`, and the per-zoom widths table `tramLineWidths()` (z11: casing 4 /
+  line 2, z13: 5 / 2.5, rising one px per zoom to z19: 11 / 5.5).
+- `src/map/TramLineOverlay.ts` (new): imperative layer modeled on
+  TramMarkerLayer. Creates the pane (z-index 350, `pointer-events: none`),
+  draws one casing polyline per pattern then one green polyline per pattern
+  (draw order puts every green line above every casing within the pane's one
+  shared SVG renderer), all `interactive: false`, every coordinate, nothing
+  simplified; a pattern with empty geometry draws nothing (there is nothing
+  to drop). Applies widths on `zoomend`. `load(apiKey)` calls the loader;
+  a failure logs once and draws nothing (never touches the marker pipeline).
+  `dispose()` removes the polylines and the pane; a late resolution after
+  dispose draws nothing.
+- `src/map/MapView.tsx`: constructs and loads the overlay next to the tile
+  layer, only when the key exists (with no key: no basemap and no overlay
+  request, nothing throws), disposes it on teardown.
+- `Docs/digitransit.md`: overlay row in the data-architecture table + a
+  TV-0019 paragraph.
+- `package.json` unchanged; no new dependency.
+
+### Evidence
+
+Checks (2026-09-28): `npm run format:check`, `npm run lint`, `npm run build`
+all green; `dist/` deleted after the build; no tracked file contains the key
+(`.env.local` copied for the live run, deleted after; it never appears in any
+log — URLs were redacted in the harness, request headers never read).
+
+**Live observations** (dev server :5275, headless Chrome driven over CDP;
+script and raw logs in /tmp, quoted below):
+
+- Network log spanning the load, a pan, two zooms (13→16→11→13), a popup
+  open (marker click, Esc close) and a navigation to `#/vehicle/40/435` and
+  back shows **exactly one** overlay request: `POST
+  https://api.digitransit.fi/routing/v2/hsl/gtfs/v1 -> 200,
+  query=TramNetworkGeometry` — zero in the vehicle phase, zero in the return
+  phase (the return redrew from the session cache: markers 106, overlay paths
+  300). 134 raw lines saved; the overlay line is `#40 phase=load POST ... ->
+  200 93714B`.
+- Payload, measured from the response body captured off the app's own
+  request: HTTP 200, 31 routes / 150 patterns / 25 319 coordinates,
+  **861 404 bytes uncompressed** (the 93 714 B in the network line is the
+  gzipped transfer size), matching the amendment's 31 / 150 / 25 319 /
+  ~862 KB. Every returned short name passes `isTramLineShortName`: all 31
+  (1..15 with variants, plus `H`) are lines the app displays — the returned
+  set is not wider than the displayed set. (Line 14 is absent from the API's
+  TRAM set.)
+- Geometry alignment, computed from the app's own stop data (the same
+  endpoint and the `route(id:) patterns { directionId stops { gtfsId name
+  lat lon } }` block `loadRoutePatterns` issues; trimmed only of the popup's
+  trip fields) against the drawn polylines (point-to-segment, equirectangular
+  projection):
+  - Rautatientori (stop `HSL:1020456`, from line 9's stop data): min
+    **5.3 m** — winner line 12 both directions, line H, line 9.
+  - Katajanokka terminal (stop `HSL:1080413`, from line 5's stop data): min
+    **3.4 m** — winner line 5 both directions + 5T.
+  - Saunalahdentie, Munkkiniemi (stop `HSL:1301456`, from line 4's stop
+    data): min **3.2 m** — winner line 4 both directions + 4H.
+  The stops sit on the corridors of the lines that serve them, at the
+  few-metre offset expected between a platform stop and the planned track
+  line.
+- Interaction / no regression: markers stay on top (pane 350 < markerPane
+  600) and a marker click opened the TV-0023 HUD popup (line 1 tram, vehicle
+  key 40/435) and Esc closed it; exactly one MQTT (`wss://mqtt.hsl.fi`) socket
+  OPEN at every checkpoint (1 after load with the overlay drawn; on the
+  vehicle page the map's socket closed and the overview's opened; on the
+  return the map's reopened); the overlay is never rebuilt by updates — the
+  300 path elements were tagged with a DOM attribute after load and, after
+  the pan, the two zooms (whose `zoomend` rewrites stroke-width in place)
+  and ~30 snapshots, all 300 were still the same tagged elements.
+- Screenshots captured at z13, z16 and z11 (106 markers, 300 overlay paths at
+  each): **/tmp/tv0019-z13.png, /tmp/tv0019-z16.png, /tmp/tv0019-z11.png**.
+  **I could not interpret them**: the model executing this task does not
+  support images, so the visual judgement (corridors vs bus roads, casing
+  readability under markers, legibility) is **handed to the human** and was
+  not made.
+
+**Code-level substitutes** (stated, not observed live):
+
+- Styling/stacking verified against the DOM instead of visually: at z11/z13/
+  z16 the 300 paths carry exactly `stroke #FFFFFF` ×150 / `#00985F` ×150 with
+  widths 4/2, 5/2.5, 8/4 (the per-zoom table applied), the pane has inline
+  z-index 350 and computed `pointer-events: none`, and no path carries
+  `leaflet-interactive` — the overlay cannot capture clicks (the DOM check,
+  not a click-through test).
+- The zoom-width table (z14-z19 values) is the code's statement, not a
+  per-zoom measurement; z11/z13/z16 were observed in the DOM.
+- No-key degradation is reasoned from code (the loader is only called when
+  `tryGetDigitransitApiKey()` returns a key, the same guard as the tile
+  layer) — not exercised live with a keyless run.
+
+### Known limitations
+
+- Both directions of a line are drawn as separate coincident geometries
+  (the alignment winners show both directions of 5/9/12 at the same stops).
+- The geometry is the planned GTFS pattern shape, not rails.
+- The payload carries no freshness field; the overlay is as fresh as the
+  GTFS served at request time.
+- No zoom range is empty: the overlay draws at every zoom the map allows
+  (11-19); observed in the DOM at 11/13/16.
+- No returned short name is outside the displayed set, so nothing was
+  filtered or silently drawn beyond it.
+- The casing widths at z11-13 (4-5 px) proved fine in the DOM checks; the
+  amendment's documented-deviation escape was not needed — but the visual
+  confirmation is outstanding with the human.
+- The screenshots await the human's visual judgement (above).
