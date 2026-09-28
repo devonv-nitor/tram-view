@@ -11,6 +11,7 @@ providing an at-a-glance view of the state of the tram system.
 | ---- | ----------- |
 | [TV-0019](Tasks/TV-0019-tram-line-overlay.md) — `BLOCKED` | Tram line overlay on the basemap: source and scope undecided (`Decision requested` in the task) |
 | [TV-0024](Tasks/TV-0024-retire-debug-route-plumbing.md) — `READY` | Remove the TV-0016 debug route-resolution plumbing whose only consumer was the deleted debug popup |
+| [TV-0025](Tasks/TV-0025-popup-eta.md) — `READY` | Marker popup refinement (user request 2026-09-26): the Heading cell becomes an ETA to the next stop, in seconds, from the Routing API's trip timetable corrected by the reported deviation |
 
 ## Completed work
 
@@ -53,4 +54,6 @@ ADR-0003). Open work is
 [TV-0019](Tasks/TV-0019-tram-line-overlay.md) (tram line overlay, blocked on a
 human decision) and
 [TV-0024](Tasks/TV-0024-retire-debug-route-plumbing.md) (remove the dead
-TV-0016 debug route-resolution plumbing).
+TV-0016 debug route-resolution plumbing) and
+[TV-0025](Tasks/TV-0025-popup-eta.md) (the popup's Heading cell becomes an ETA
+to the next stop).
