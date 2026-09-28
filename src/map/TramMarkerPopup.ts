@@ -122,7 +122,8 @@ const ETA_EXPLANATION =
  * `etaSeconds` is the ETA to the next stop in whole seconds (TV-0025),
  * computed from `now` at the caller's render time, or null while it is not
  * derivable - no matched trip yet, no stop time for the next stop, no
- * reported schedule deviation - which renders the muted dash. */
+ * reported schedule deviation, or a corrected arrival materially in the past
+ * (TV-0026) - which renders the muted dash. */
 export function buildTramPopupHtml(
   position: TramPosition,
   nextStopName: string | null = null,

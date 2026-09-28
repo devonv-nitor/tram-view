@@ -116,7 +116,7 @@ export function formatSpeedKmh(metersPerSecond: number | null): string {
 
 /** Whole seconds with a " s" suffix - the map popup's ETA (TV-0025). The
  * user's instruction is seconds only, never M:SS, so a minute or more stays
- * in seconds ("252 s"). The value arrives already clamped at 0 by
+ * in seconds ("252 s"). The value arrives already non-negative from
  * etaSecondsToNextStop; null renders nothing - the caller shows its honest
  * muted dash instead. */
 export function formatEtaSeconds(seconds: number | null): string {

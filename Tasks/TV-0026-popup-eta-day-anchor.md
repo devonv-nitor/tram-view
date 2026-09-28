@@ -1,6 +1,6 @@
 ---
 id: TV-0026
-status: READY
+status: REVIEW
 owner: agent
 gatekeeper: human
 required_approvals: []
@@ -152,3 +152,66 @@ estimate; show `0` only when the answer is genuinely 0.
   touch that file; if both run at once the coordinator reviews the merge delta.
 
 ## Handoff (status: REVIEW → DONE — optional, delete before merge)
+
+Implemented on branch
+`bb/tv-0026-popup-eta-day-anchor-worker-thr_336qfkrzeb` (commit pending at
+handoff; the reviewer request reports the exact tip SHA). Every acceptance
+met; none reduced.
+
+- **Files changed.** `src/lib/journey.ts` (`helsinkiMidnightMs` exported for
+  the harness; new `helsinkiTodayYmd`; new `ETA_PAST_TOLERANCE_MS`;
+  `matchedTripTimetableInstant` takes `deviationSeconds` + `now` and resolves
+  the two-candidate day rule; `etaSecondsToNextStop` returns the rounded
+  countdown, `0` within the 90 s dwell tolerance, `null` beyond); callers in
+  `src/map/TramMarkers.ts` (`etaSeconds`, `matchedTripInstant` pass
+  `position.scheduleDeviation` and `Date.now()`); doc-comment sync in
+  `src/map/TramMarkerPopup.ts` and `src/lib/format.ts` (the old "clamped at
+  0" wording); the popup paragraph of `Docs/digitransit.md`. `package.json`
+  untouched.
+- **Checks.** `format:check`, `lint`, `build` all pass; `dist/` deleted
+  after; `.env.local` deleted after live verification (key never printed or
+  committed); dev server, headless Chrome and temp profiles killed.
+- **Acceptance 1 (harness — code-level, not a browser observation).** A Node
+  harness bundled the shipped functions and fed the real API response shape:
+  all checks passed (output at `/tmp/tv0026-harness-output.txt`). A misdated
+  trip's instant equals `todayMidnight + seconds × 1000` (live trips
+  `HSL:1005_20260925_*`); `25:30` on yesterday's service day still resolves
+  to today 01:30 (nearer candidate); boundary −90 000 ms past → `0`,
+  −90 001 ms → `null`; 400 s past → `null`, 30 s past → `0`, 200 s future →
+  `200`; sweep dl −600..+600 × instant now−700s..now+700s: no negative or
+  non-integer result.
+- **Acceptance 2 (live, affected line).** Dev server + headless Chrome over
+  CDP, before/after for the same vehicles (output
+  `/tmp/tv0026-live-output.txt`). BEFORE on the deployed TV-0025 site: all 6
+  sampled line-5 popups stuck at `0 s` through two reads 2.5 s apart — the
+  reported defect reproduced. AFTER on this branch: all 7 line-5 popups show
+  real countdowns; watching #650 across 5 consecutive next stops (330 samples
+  at 1 Hz), the captured instant equals the trip's stop time on the running
+  day minus `dl` at 5/5 stops (2 exact, 3 within 1 s of the popup's ~1 Hz
+  render-tick skew, reported as such).
+- **Acceptance 3 (muted dash).** No in-situ materially-passed observation in
+  the windows (the #650 `+359 s` origin case did not recur); the **injected
+  stub** was used, stated as the substitute: in-page shipped
+  `etaSecondsToNextStop(now − 400 000, 359, now)` → `null`, and the injected
+  popup renders the muted `—` cell with the existing title/explanation text
+  unchanged; a 200 s countdown still renders `200 s` unmuted.
+- **Acceptance 4 (control).** Line 10 (trip day `20260928`) counted down as
+  before (e.g. 112 s → 110 s across two reads); no regression observed.
+- **Acceptance 5 (audit).** CDP network log: 1 data WebSocket for the map
+  (`wss://mqtt.hsl.fi`, the dev server's HMR socket excluded); baseline
+  POSTs per session only; exactly one `RoutePatterns` POST for route 1005;
+  popup close/reopen added no request.
+- **Acceptance 7 (blast radius).**
+  `grep -rn "helsinkiMidnightMs|matchedTripTimetableInstant|etaSecondsToNextStop"
+  src/` hits only `src/lib/journey.ts` (definitions) and
+  `src/map/TramMarkers.ts` (the callers), plus one doc-comment mention in
+  `src/lib/format.ts` (`formatEtaSeconds`'s contract comment) — no code path
+  outside the popup's ETA uses the anchor or the clamp.
+- **Known limitations.** (1) The two-candidate day rule compares corrected
+  arrivals with `dl = 0` when the feed has not reported a deviation — the
+  caller renders the dash for a missing deviation anyway, so no value is
+  shown from that comparison. (2) The live feed's misdated trips are feed
+  data, dated 2026-09-28; if the feed fixes its trip dates, the rule keeps
+  both candidates correct and needs no change. (3) One harness check was
+  fixed during development (an expected "today 01:30" value was 1800 s,
+  corrected to 5400 s — the implementation was right).
