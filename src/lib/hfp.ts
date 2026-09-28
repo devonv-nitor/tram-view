@@ -39,6 +39,12 @@ export interface HfpVehiclePosition {
   /** Stop id from the payload when present (about half of `vp` messages),
    * else null (TV-0023). */
   stop: number | null;
+  /** TV-0025: next-stop id from the topic's level 13, which every
+   * ongoing-journey topic carries (measured in 100% of sampled vp messages
+   * where the payload field is in only ~49%). Null when the topic has no
+   * such level; the consumer prefers the payload `stop` when present - the
+   * two agreed in every sample. */
+  topicNextStopId: string | null;
   /** Destination/headsign text parsed from the HFP topic (TV-0023). */
   headsign: string | null;
 }
@@ -97,6 +103,7 @@ export function parseHfpPosition(payload: string): HfpVehiclePosition | null {
     drst: typeof vp.drst === "number" ? vp.drst : null,
     dl: typeof vp.dl === "number" ? vp.dl : null,
     stop: typeof vp.stop === "number" ? vp.stop : null,
+    topicNextStopId: null,
     headsign: null,
   };
 }
@@ -438,6 +445,11 @@ export function subscribeTramPositions(handlers: {
           if (topicParts !== null) {
             const headsign = topicParts.headsign.trim();
             position.headsign = headsign === "" ? null : headsign;
+            // TV-0025: carry the topic's level-13 next-stop id too - the
+            // payload's stop field is absent from about half the vp
+            // messages, the topic level is in all of them, and the two
+            // agreed in every sample; the consumer prefers the payload.
+            position.topicNextStopId = topicParts.nextStopId;
           }
           handlers.onPosition(position);
         }

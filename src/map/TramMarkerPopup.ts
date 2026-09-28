@@ -8,7 +8,7 @@
  * shell (wrapper, tip, close button) is restyled in index.css under the
  * `.tram-hud-shell` className TramMarkerLayer passes to bindPopup.
  * - Header: line badge (#fcb919) | vehicle key stacked over GTFS key | headsign pill
- * - Speed + Heading side by side
+ * - Speed + ETA side by side
  * - Doors + Schedule deviation side by side
  * - Next stop row with a #fcb919 left accent border (deviation NOT repeated
  *   here); the id the HFP payload reports is shown as the name the caller
@@ -17,6 +17,13 @@
  *   open popup when they arrive)
  * - "Open vehicle overview →" nav link
  *
+ * TV-0025: the Heading cell is an ETA cell - the estimated time to the next
+ * stop, in whole seconds, computed by the caller from the Routing API's
+ * live-trip match timetable corrected by the reported schedule deviation.
+ * The cell is an estimate and is labelled as one: the value's accessible
+ * explanation (and the hover title) say so in one line, and every fallback
+ * is the same muted "—" the other cells use - never an invented number.
+ *
  * Presentation only - nothing here mutates the snapshot state. Content is
  * rebuilt from the current position on every snapshot while the popup is open
  * (see TramMarkerLayer).
@@ -24,7 +31,7 @@
 import type { TramPosition } from "../lib/digitransit.ts";
 import {
   describeDeviation,
-  formatHeadingCompact,
+  formatEtaSeconds,
   formatSpeedKmh,
   type DeviationTone,
 } from "../lib/format.ts";
@@ -96,15 +103,30 @@ function deviationClass(tone: DeviationTone): string {
   }
 }
 
+/** The ETA cell's accessible explanation (TV-0025): the overview's own
+ * wording in one line - the figure is the timetable corrected by the
+ * *reported* schedule deviation, an estimate, not a measurement. It is
+ * carried on the cell as a visually hidden line and as the hover title, in
+ * both the value and the dash state, since it describes the figure's basis,
+ * not the figure itself. */
+const ETA_EXPLANATION =
+  "Estimated time to the next stop: the trip timetable corrected by the reported schedule deviation — an estimate, not a measurement";
+
 /** Builds the HUD dashboard popup HTML for one position. Every value that
  * originates in the feed is escaped at its insertion point.
  *
  * `nextStopName` is the resolved name of the position's next stop (TV-0023),
  * or null while the caller has none - the row then keeps the bare HFP id, so
- * it is never empty and never invents a name. */
+ * it is never empty and never invents a name.
+ *
+ * `etaSeconds` is the ETA to the next stop in whole seconds (TV-0025),
+ * computed from `now` at the caller's render time, or null while it is not
+ * derivable - no matched trip yet, no stop time for the next stop, no
+ * reported schedule deviation - which renders the muted dash. */
 export function buildTramPopupHtml(
   position: TramPosition,
   nextStopName: string | null = null,
+  etaSeconds: number | null = null,
 ): string {
   const barTram = isSparakoffBarTram(position);
   const lineLabel = barTram
@@ -127,15 +149,18 @@ export function buildTramPopupHtml(
       : `<span class="tram-hud-popup__headsign-pill tram-hud-popup__headsign-pill--empty">—</span>`) +
     `</div>` +
     `<div class="tram-hud-popup__body">` +
-    // Row 1: Speed + Heading side by side
+    // Row 1: Speed + ETA side by side. The ETA cell (TV-0025) carries its
+    // accessible explanation on the cell and a visually hidden line after the
+    // value; the value is whole seconds (35 s, 252 s) or the muted dash.
     `<div class="tram-hud-popup__row">` +
     `<div class="tram-hud-popup__metric">` +
     `<span class="tram-hud-popup__metric-label">Speed</span>` +
     `<span class="tram-hud-popup__metric-value">${escapeHtml(formatSpeedKmh(position.speed))}</span>` +
     `</div>` +
-    `<div class="tram-hud-popup__metric">` +
-    `<span class="tram-hud-popup__metric-label">Heading</span>` +
-    `<span class="tram-hud-popup__metric-value">${escapeHtml(formatHeadingCompact(position.heading))}</span>` +
+    `<div class="tram-hud-popup__metric" title="${escapeHtml(ETA_EXPLANATION)}">` +
+    `<span class="tram-hud-popup__metric-label">ETA</span>` +
+    `<span class="tram-hud-popup__metric-value${etaSeconds === null ? " tram-hud-popup__metric-value--muted" : ""}">${escapeHtml(formatEtaSeconds(etaSeconds))}</span>` +
+    `<span class="tram-hud-popup__sr">${escapeHtml(ETA_EXPLANATION)}</span>` +
     `</div>` +
     `</div>` +
     // Row 2: Doors + Schedule deviation side by side

@@ -114,6 +114,16 @@ export function formatSpeedKmh(metersPerSecond: number | null): string {
   return `${Math.round(metersPerSecond * 3.6)} km/h`;
 }
 
+/** Whole seconds with a " s" suffix - the map popup's ETA (TV-0025). The
+ * user's instruction is seconds only, never M:SS, so a minute or more stays
+ * in seconds ("252 s"). The value arrives already clamped at 0 by
+ * etaSecondsToNextStop; null renders nothing - the caller shows its honest
+ * muted dash instead. */
+export function formatEtaSeconds(seconds: number | null): string {
+  if (seconds === null || !Number.isFinite(seconds)) return "—";
+  return `${Math.round(seconds)} s`;
+}
+
 /** Acceleration as reported, m/s². */
 export function formatAcceleration(acceleration: number | null): string {
   if (acceleration === null || !Number.isFinite(acceleration)) return "—";
@@ -142,13 +152,6 @@ function compassRead(
 export function formatHeading(heading: number | null): string {
   const read = compassRead(heading);
   return read === null ? "—" : `${read.degrees}° (${read.octant})`;
-}
-
-/** Heading without the parentheses - the compact form the map popup's HUD
- * uses (TV-0023: "215° SW"). Same rule as formatHeading. */
-export function formatHeadingCompact(heading: number | null): string {
-  const read = compassRead(heading);
-  return read === null ? "—" : `${read.degrees}° ${read.octant}`;
 }
 
 /** Door state from `drst` bit 0 plus whether the bit is all we know. */

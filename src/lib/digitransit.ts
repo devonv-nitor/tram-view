@@ -60,7 +60,10 @@ export interface TramPosition {
   doorState: "open" | "closed" | null;
   /** Destination/headsign text from the HFP topic (TV-0023). */
   headsign: string | null;
-  /** Next-stop id from the HFP topic (TV-0023). */
+  /** Next-stop id from the HFP payload's `stop` field, else the HFP topic's
+   * level-13 next-stop id (TV-0025; the payload wins when both are present,
+   * and the two agreed in every sampled position, so this only widens
+   * coverage from the payload's ~49% to the topic's 100%). */
   nextStopId: string | null;
   /** HFP schedule deviation in seconds: positive = ahead of timetable,
    * negative = behind (TV-0023). */
@@ -509,13 +512,18 @@ export function resolveLiveTramTrip(vehicleKey: string): LiveTramTripMatch {
 }
 
 /**
- * TV-0017/TV-0020: the trip-pattern query behind the vehicle overview's
- * journey spine (ADR-0002 amendment). One query per **route** per session:
- * the pattern gives the ordered stop names with their coordinates, and
- * `vehiclePositions` gives the id of every vehicle the Routing API is
- * currently running on a trip of that pattern, which is what lets the
- * overview show the pattern of the vehicle's *own* trip instead of an
- * arbitrary one sharing its direction (TV-0020).
+ * TV-0017/TV-0020/TV-0025: the trip-pattern query behind the vehicle
+ * overview's journey spine and the marker popup's ETA (ADR-0002 amendment).
+ * One query per **route** per session: the pattern gives the ordered stop
+ * names with their coordinates, `vehiclePositions` gives the id of every
+ * vehicle the Routing API is currently running on a trip of that pattern,
+ * which is what lets the overview show the pattern of the vehicle's *own*
+ * trip instead of an arbitrary one sharing its direction (TV-0020), and
+ * TV-0025 adds each matched vehicle's trip gtfsId with its stop times, which
+ * is the timetable the marker popup's ETA corrects by the reported
+ * deviation. The stop times ride on this one request - no second query and
+ * no second stream - measured 2026-09-26 at 6.2 KB -> 15.7 KB for route 13
+ * (6 live vehicles, 90 stop times).
  */
 const ROUTE_PATTERNS_QUERY = (routeGtfsId: string) => `
   query RoutePatterns {
@@ -531,6 +539,16 @@ const ROUTE_PATTERNS_QUERY = (routeGtfsId: string) => `
         }
         vehiclePositions {
           vehicleId
+          trip {
+            gtfsId
+            stoptimes {
+              scheduledArrival
+              realtimeArrival
+              stop {
+                gtfsId
+              }
+            }
+          }
         }
       }
     }
@@ -560,6 +578,41 @@ export interface TripPattern {
    * `HSL:<operator>/<vehicle>` (unpadded numbers, e.g. `HSL:40/641`). Empty
    * when no vehicle is running this pattern or the API did not match one. */
   liveVehicles: string[];
+  /** TV-0025: the trips the Routing API currently matches to those live
+   * vehicles, each with its stop times. One entry per matched vehicle (the
+   * first wins if the API ever claims one vehicle twice, as the fleet map
+   * does); empty when no vehicle is running this pattern. The marker
+   * popup's ETA reads the open vehicle's trip from here. */
+  liveTrips: MatchedTrip[];
+}
+
+/** TV-0025: one stop time of a matched trip's timetable. The arrival
+ * seconds are seconds since local midnight of the trip's operating day -
+ * never epoch ms; the day comes from the trip's gtfsId (its second
+ * `_`-component, e.g. "20260925"), because `serviceDay` was measured to be
+ * a -1 sentinel in this query's context (2026-09-26). */
+export interface TripStopTime {
+  /** GTFS stop id, e.g. "HSL:1230407". */
+  stopGtfsId: string;
+  /** Timetable arrival, seconds since local midnight of the operating day. */
+  scheduledArrival: number;
+  /** The API's realtime correction, seconds since the same midnight, or
+   * null when not numeric. Measured equal to `scheduledArrival` on every
+   * live trip sampled (2026-09-26), so today it never differs; when it
+   * does, the instant prefers it. */
+  realtimeArrival: number | null;
+}
+
+/** TV-0025: the trip the Routing API matches one live vehicle to, with its
+ * stop times. */
+export interface MatchedTrip {
+  /** The vehicle identity as the API names it, e.g. "HSL:40/641". */
+  vehicleId: string;
+  /** The matched trip's gtfsId, e.g. "HSL:1013_20260925_Ma_2_1057" - the
+   * second `_`-component is the operating day the stop-time seconds are
+   * anchored to. */
+  gtfsId: string;
+  stoptimes: TripStopTime[];
 }
 
 interface RoutePatternsData {
@@ -568,7 +621,17 @@ interface RoutePatternsData {
       directionId: number;
       headsign: string | null;
       stops: { gtfsId: string; name: string; lat: number; lon: number }[];
-      vehiclePositions: { vehicleId: string }[];
+      vehiclePositions: {
+        vehicleId: string;
+        trip: {
+          gtfsId: string;
+          stoptimes: {
+            scheduledArrival: number;
+            realtimeArrival: number | null;
+            stop: { gtfsId: string };
+          }[];
+        } | null;
+      }[];
     }[];
   } | null;
 }
@@ -617,6 +680,32 @@ async function fetchRoutePatterns(
     liveVehicles: pattern.vehiclePositions.map(
       (position) => position.vehicleId,
     ),
+    // TV-0025: keep each matched vehicle's trip with its stop times. The
+    // feed is untrusted input, so the mapping validates every value.
+    liveTrips: pattern.vehiclePositions.flatMap((position) => {
+      const trip = position.trip;
+      if (trip === null) return [];
+      return [
+        {
+          vehicleId: position.vehicleId,
+          gtfsId: trip.gtfsId,
+          stoptimes: (trip.stoptimes ?? [])
+            .filter(
+              (stopTime) =>
+                typeof stopTime.scheduledArrival === "number" &&
+                typeof stopTime.stop?.gtfsId === "string",
+            )
+            .map((stopTime) => ({
+              stopGtfsId: stopTime.stop.gtfsId,
+              scheduledArrival: stopTime.scheduledArrival,
+              realtimeArrival:
+                typeof stopTime.realtimeArrival === "number"
+                  ? stopTime.realtimeArrival
+                  : null,
+            })),
+        },
+      ];
+    }),
   }));
 }
 

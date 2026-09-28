@@ -19,7 +19,11 @@
  * builds the content; the rendering decisions never consult it). TV-0023: the
  * popup's next stop is the id the HFP payload reports resolved against the
  * route's pattern stop names, which are asked for only while a popup is open
- * and only once per route per session.
+ * and only once per route per session. TV-0025: the popup's ETA cell is
+ * computed from the Routing API's live-trip match - the matched trip's stop
+ * times ride on the same per-route load the stop names share, so the ETA adds
+ * no request of its own; the instant is corrected by the reported deviation
+ * at render time, so the value counts down with the ~1 Hz popup rebuild.
  * Direction source and live evidence (Tasks/TV-0008-tram-direction.md): the
  * HFP `hdg` field the payload already carries - verified live to match the
  * direction of travel and to persist for stopped vehicles - so no extra
@@ -38,7 +42,17 @@
  * created/removed as vehicles enter and leave the filtered feed.
  */
 import L from "leaflet";
-import { loadRouteStopNames, type TramPosition } from "../lib/digitransit.ts";
+import {
+  loadRoutePatterns,
+  loadRouteStopNames,
+  resolveLiveTramTrip,
+  type TramPosition,
+  type TripPattern,
+} from "../lib/digitransit.ts";
+import {
+  etaSecondsToNextStop,
+  matchedTripTimetableInstant,
+} from "../lib/journey.ts";
 import {
   isSparakoffBarTram,
   SPARAKOFF_MARKER_LETTER,
@@ -165,6 +179,14 @@ export class TramMarkerLayer {
   /** Route ids whose stop-name request is still in flight, so one open popup
    * asks at most once per route while waiting. */
   private readonly stopNamesPending = new Set<string>();
+  /** TV-0025: the route's patterns with the API's per-vehicle trips, filled
+   * lazily while a popup is open and cached per route. Shares
+   * `loadRoutePatterns`' per-session cache with the stop-names load, so the
+   * two never double-fetch a route. */
+  private readonly patternsByRoute = new Map<string, TripPattern[]>();
+  /** Route ids whose patterns request is still in flight, so one open popup
+   * asks at most once per route while waiting. */
+  private readonly patternsPending = new Set<string>();
 
   constructor(private readonly map: L.Map) {
     // The markers show line numbers only; the data itself is surfaced in the
@@ -269,11 +291,95 @@ export class TramMarkerLayer {
 
   /** Popup HTML for one position, carrying the next stop's name when this
    * layer already resolved the route's pattern stop names (TV-0023), and the
-   * bare id until then. A name the layer does not have yet starts the
-   * route's one shared load; `refreshOpenPopups` rewrites the open popup when
-   * it resolves. */
+   * bare id until then, plus the ETA cell's value (TV-0025) - whole seconds,
+   * computed from `now` at this call, or null while it is not derivable. A
+   * name or instant the layer does not have yet starts the route's one
+   * shared load; `refreshOpenPopups` rewrites the open popup when it
+   * resolves. */
   private popupHtml(position: TramPosition): string {
-    return buildTramPopupHtml(position, this.nextStopName(position));
+    return buildTramPopupHtml(
+      position,
+      this.nextStopName(position),
+      this.etaSeconds(position),
+    );
+  }
+
+  /** TV-0025: the ETA cell's value for one position - whole seconds to the
+   * next stop, or null while it is not derivable (no reported deviation, no
+   * matched trip in the layer's cache yet, no stop time for the next stop).
+   * The timetable instant comes from the Routing API's live-trip match,
+   * loaded only while a popup is open and once per route per session;
+   * `now` is render time, so the value counts down with the ~1 Hz popup
+   * rebuild and needs no timer of its own. */
+  private etaSeconds(position: TramPosition): number | null {
+    if (position.scheduleDeviation === null) return null;
+    const instant = this.matchedTripInstant(position);
+    if (instant === null) return null;
+    return etaSecondsToNextStop(
+      instant,
+      position.scheduleDeviation,
+      Date.now(),
+    );
+  }
+
+  /** The matched trip's timetable instant for the position's next stop, from
+   * the route patterns this layer has cached. The reported route id is tried
+   * first, then the live-trip match's route for a variant-suffixed id the
+   * API resolves elsewhere (TV-0022) - its patterns carry the vehicle's
+   * trip. A route the layer does not have yet starts its one shared load
+   * (the same per-session cache the stop names share) and yields null until
+   * it resolves; the load resolves into `refreshOpenPopups` either way. */
+  private matchedTripInstant(position: TramPosition): number | null {
+    if (position.nextStopId === null) return null;
+    const routeIds = [position.routeId];
+    const matched = resolveLiveTramTrip(vehicleKey(position)).routeId;
+    if (matched !== null && matched !== position.routeId) {
+      routeIds.push(matched);
+    }
+    for (const routeId of routeIds) {
+      const patterns = this.patternsByRoute.get(routeId);
+      if (patterns === undefined) {
+        this.ensurePatterns(routeId);
+        continue;
+      }
+      const instant = matchedTripTimetableInstant(
+        patterns,
+        position,
+        position.nextStopId,
+      );
+      if (instant !== null) return instant;
+    }
+    return null;
+  }
+
+  /** TV-0025: loads one route's patterns (which carry the API's per-vehicle
+   * trips and their stop times) once, then rewrites the open popup so the
+   * ETA cell picks the value up without waiting for a snapshot. Shares
+   * `loadRoutePatterns`' per-session cache with the stop-names load, so the
+   * two never double-fetch a route. */
+  private ensurePatterns(routeId: string): void {
+    if (
+      this.patternsByRoute.has(routeId) ||
+      this.patternsPending.has(routeId)
+    ) {
+      return;
+    }
+    this.patternsPending.add(routeId);
+    void loadRoutePatterns(routeId)
+      .then((patterns) => {
+        this.patternsByRoute.set(routeId, patterns);
+        this.patternsPending.delete(routeId);
+        this.refreshOpenPopups();
+      })
+      .catch((cause: unknown) => {
+        this.patternsPending.delete(routeId);
+        // A failed load changes nothing on screen (the ETA cell keeps its
+        // honest dash), so it is logged once per attempt and never escalated.
+        console.warn(
+          "[tram-view] route patterns failed:",
+          cause instanceof Error ? cause.message : String(cause),
+        );
+      });
   }
 
   /** The next stop's name for one position, or null while it is unknown.
@@ -394,5 +500,7 @@ export class TramMarkerLayer {
     this.latestPositions.clear();
     this.stopNamesByRoute.clear();
     this.stopNamesPending.clear();
+    this.patternsByRoute.clear();
+    this.patternsPending.clear();
   }
 }
