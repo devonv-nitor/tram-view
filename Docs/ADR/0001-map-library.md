@@ -1,8 +1,9 @@
 # ADR-0001: Map library and MVP tile source
 
 - **Status:** Accepted (implemented in [TV-0003](../../Tasks/TV-0003-map-view.md));
-  basemap source amended 2026-09-25 by TV-0018 (DONE, merged at 048731c) — see
-  the amendment at the end of this file
+  basemap source amended 2026-09-25 by TV-0018 (DONE, merged at 048731c) and the
+  tram line overlay added 2026-09-28 by TV-0019 — see the two amendments at the
+  end of this file
 - **Date:** 2026-09-23
 - **Context:** [Docs/Idea.md](../Idea.md) — interactive Helsinki map view, deployable
   to GitHub Pages with no backend, no paid API keys for the MVP.
@@ -114,11 +115,12 @@ information and that the tram network should be prominently visible
 (2026-09-25). OSM Carto renders the tram network as a 0.75-1.5 px grey
 `#6E6E6E` line for `railway=tram` (from z12) and 4-6 px grey square
 `railway=tram_stop` dots (from z14, named from z16) — present but visually
-buried. The user decided on 2026-09-25 to switch to HSL's own basemap; whether
-the app additionally draws tram line geometry as an overlay is a separate,
-still undecided task (TV-0019), and this basemap draws no transit geometry of
+buried. The user decided on 2026-09-25 to switch to HSL's own basemap; drawing
+tram line geometry as an overlay layer is decided in the overlay amendment at
+the end of this file (TV-0019), and this basemap draws no transit geometry of
 its own (verified: no HSL tram green `#00985F` or bus blue `#007AC9` pixels at
-any tested zoom).
+any tested zoom) — which is exactly why the overlay is a layer the app owns
+rather than something the basemap could be retuned to provide.
 
 ### Options compared (live probes, 2026-09-25)
 
@@ -197,3 +199,83 @@ retina placeholder, `@2x`). Leaflet maps the 512 px tiles to the map with
   `hsl-map` source, or if the key's tile traffic becomes a quota problem — the
   documented alternatives above are key-free only in the stale/blank cases, so
   the realistic fallback is a static or self-hosted raster style.
+
+## Amendment: tram line overlay on the basemap
+
+- **Status:** Accepted (2026-09-28, user decision); implemented by TV-0019.
+- **Decides:** that the map page draws the tram network as its own layer, from
+  which source, and at what level of detail; the layer's stacking and styling;
+  and that this decision adds no overlay UI control.
+- **Refines, does not replace, the Decision above or the basemap amendment:**
+  the map library stays Leaflet 1.x and the basemap stays `hsl-map`; this
+  amendment adds an app-owned vector layer above it. The basemap amendment's
+  statement that `hsl-map` draws no transit geometry stays true and is the
+  reason the overlay has to be a layer the app owns.
+- **Affects:** `src/map/MapView.tsx`, `src/map/constants.ts`,
+  `src/lib/digitransit.ts`, `Docs/digitransit.md`.
+
+### Decision
+
+The user's answers to the three questions the task posed (2026-09-28):
+
+1. **Draw the overlay.** The basemap swap (TV-0018) removed the clutter, but the
+   tram network should be visibly present, so the overlay is in scope.
+2. **Source A — the Digitransit Routing API**, one query per session:
+   `{ routes(transportModes: [TRAM]) { gtfsId shortName patterns { directionId
+   geometry { lat lon } } } }`.
+3. **Draw every pattern.** No deduplication into one geometry per displayed
+   short name, and no geometry simplification.
+
+### Why
+
+- **Source A** reuses the app's existing key and the exact pattern-query path
+  TV-0017 already exercises, adds no dependency, and reads the same live GTFS as
+  the line labels, so a drawn line and a marker's label cannot disagree about
+  which lines exist. Measured 2026-09-25: 31 routes / 150 patterns / 25 319
+  coordinates / 862 KB in ~2.5 s, HTTP 200, CORS `*`; `geometry` is
+  `[Coordinates] {lat, lon}`, not an encoded polyline.
+- **Every pattern** is the true network shape and needs no dedup or simplify
+  rule to justify; collapsing to one geometry per displayed short name would
+  turn 150 patterns into ~19 names and hide the short-turn variants (`10B`,
+  `1T`, `5T`, …) the app already labels. The cost is small at this network
+  size: 150 polylines and 25 319 points, doubled to 50 638 when the HSL casing
+  is drawn as a second polyline beneath the green one.
+- Rejected, with the reasons that decided it: **B** HSL Jore route vector tiles
+  — key-free and live, but an undocumented internal endpoint with no published
+  terms *and* requiring a vector-tile decoder or the MapLibre switch named as
+  the revisit point in the Decision above; **C** the HSL "HSL:n linjat" ArcGIS
+  FeatureServer — key-free but stale (service dates end 2025-12, no lines
+  14/15); **D** OSM `railway=tram` via Overpass — true track geometry, but
+  runtime Overpass is rate-limited, so it would mean a committed snapshot that
+  goes stale; **E** tram stops only — no route shape at all.
+
+### Consequences
+
+- **Stacking is fixed by this amendment.** The overlay is non-interactive and
+  lives in its own pane between `tilePane` (z-index 200) and `markerPane`
+  (z-index 600), so it draws above the basemap and below the tram markers:
+  markers, their popups and the status panel stay on top and clickable, and
+  marker colours and direction rotors are unchanged.
+- **Style** follows HSL's own tram rendering — a white casing under HSL tram
+  green `#00985F` — with the per-zoom widths stated in the code. A documented
+  deviation is permitted if the casing proves too heavy under the markers at
+  z11-13; the deviation and its reason are recorded where the widths are.
+- **The overlay is always on.** This decision adds no toggle, no legend entry,
+  and no other UI control; a control would be its own task with its own
+  decision.
+- **One request per session, map page only.** The vehicle overview page
+  (ADR-0004) keeps exactly one data client and opens no overlay request; the
+  map's existing HFP subscription and metadata query are unchanged.
+- **Key discipline is unchanged** (ADR-0003): the key is appended at runtime and
+  is never logged, printed, or committed. A missing key must degrade the overlay
+  to no lines without throwing — the basemap, markers and panel keep working as
+  they do today.
+- **What this source cannot tell.** The geometry is the *planned* pattern shape
+  from GTFS, not rails, so two directions of a line are drawn as two lines that
+  coincide where the track is shared; the response carries no service-date or
+  freshness field (unlike B/C/D), so the overlay is as fresh as the GTFS the
+  Routing API serves at request time; and nothing in the payload says how
+  recently a pattern was operated.
+- **Revisit** if the payload or point count grows enough to cost pan/zoom
+  smoothness, if the casing has to be dropped, or if a key-free live source with
+  published terms and a documented licence appears.
