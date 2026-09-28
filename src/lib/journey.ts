@@ -10,7 +10,7 @@
  * `timetable - dl` using the *reported* deviation and its age - never
  * presented as a measurement.
  */
-import type { TripPattern } from "./digitransit.ts";
+import type { MatchedTrip, TripPattern } from "./digitransit.ts";
 import { formatClock } from "./format.ts";
 import type { TelemetryEvent } from "./vehicleTelemetry.ts";
 
@@ -390,4 +390,128 @@ export function estimateNextArrival(
     basis: `${field} ${formatClock(timetableAt, false)}, announced by the ${announced.type} event at ${formatClock(announced.at)} and corrected by the reported dl (${deviation.dl > 0 ? "+" : ""}${Math.round(deviation.dl)} s)`,
     deviationAgeMs: now - deviation.at,
   };
+}
+
+/** TV-0025: local midnight in Helsinki (the timetable's timezone) for one
+ * operating day, from the HSL gtfsId day component ("20260925"). The Routing
+ * API reports stop times as seconds since that midnight, never epoch ms, so
+ * this is the anchor they are added to. No dependency: the Helsinki offset
+ * (+2 winter, +3 summer) is read through `Intl` at a first estimate and
+ * refined once at that estimate, which is exact across the March/October DST
+ * transitions - the offset only changes at 03:00/04:00 local, hours away
+ * from midnight, so one refinement settles it. Returns null for a day that
+ * is not a parseable date. */
+function helsinkiMidnightMs(ymd: string): number | null {
+  if (ymd.length !== 8) return null;
+  const year = Number(ymd.slice(0, 4));
+  const month = Number(ymd.slice(4, 6));
+  const day = Number(ymd.slice(6, 8));
+  if (
+    !Number.isInteger(year) ||
+    !Number.isInteger(month) ||
+    !Number.isInteger(day) ||
+    month < 1 ||
+    month > 12 ||
+    day < 1 ||
+    day > 31
+  ) {
+    return null;
+  }
+  // The offset (local = UTC + offset) is positive for Helsinki.
+  const offset = (atMs: number): number => {
+    const parts = new Intl.DateTimeFormat("en-US", {
+      timeZone: "Europe/Helsinki",
+      hour12: false,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+    }).formatToParts(new Date(atMs));
+    const get = (type: string) =>
+      Number(parts.find((part) => part.type === type)?.value ?? "0");
+    return (
+      Date.UTC(
+        get("year"),
+        get("month") - 1,
+        get("day"),
+        get("hour") % 24,
+        get("minute"),
+        get("second"),
+      ) - atMs
+    );
+  };
+  // Start from noon UTC of the day (far from both DST transitions), subtract
+  // the offset for a first estimate of local midnight, then resample the
+  // offset at that estimate and subtract again from the midnight-UTC base.
+  const midnightUtc = Date.UTC(year, month - 1, day);
+  return (
+    midnightUtc -
+    offset(midnightUtc - offset(Date.UTC(year, month - 1, day, 12)))
+  );
+}
+
+/** TV-0025: the timetable instant of one vehicle's next stop, from the
+ * Routing API's own live-trip match: the trip the API reports for the
+ * vehicle's identity (`liveTrips`), and that trip's stop time for the
+ * reported next stop, matched by bare stop id. Returns null when the API
+ * reports no trip for the vehicle, the trip has no stop time for the next
+ * stop, or the trip's gtfsId carries no parseable operating day - the
+ * popup's honest dash, never a guess. The instant prefers a
+ * realtime-corrected arrival when the API supplies one that differs from
+ * the scheduled one (measured 2026-09-26: it never does today). */
+export function matchedTripTimetableInstant(
+  patterns: TripPattern[],
+  vehicle: { operatorId: number; vehicleNumber: number },
+  nextStopId: string,
+): number | null {
+  const vehicleId = liveVehicleId(vehicle.operatorId, vehicle.vehicleNumber);
+  if (vehicleId === null) return null;
+  for (const pattern of patterns) {
+    for (const trip of pattern.liveTrips) {
+      if (trip.vehicleId !== vehicleId) continue;
+      const stopTime: MatchedTrip["stoptimes"][number] | undefined =
+        trip.stoptimes.find(
+          (candidate) => bareStopId(candidate.stopGtfsId) === nextStopId,
+        );
+      if (stopTime === undefined) continue;
+      const midnight = helsinkiMidnightMs(trip.gtfsId.split("_")[1] ?? "");
+      if (midnight === null) return null;
+      const seconds =
+        stopTime.realtimeArrival !== null &&
+        stopTime.realtimeArrival !== stopTime.scheduledArrival
+          ? stopTime.realtimeArrival
+          : stopTime.scheduledArrival;
+      return midnight + seconds * 1000;
+    }
+  }
+  return null;
+}
+
+/** TV-0025: the marker popup's ETA to the next stop - the same model as
+ * `estimateNextArrival` above (timetable minus the reported dl), fed from
+ * the Routing API's live-trip match instead of HFP stop events. Whole
+ * seconds, clamped at 0 (a tram whose corrected instant has passed is 0 s
+ * away, never negative), or null when either input is missing - the popup's
+ * honest dash. `now` is render time, so the value counts down with the
+ * popup's ~1 Hz rebuild and needs no timer of its own. */
+export function etaSecondsToNextStop(
+  timetableInstantMs: number | null,
+  deviationSeconds: number | null,
+  now: number,
+): number | null {
+  if (
+    timetableInstantMs === null ||
+    deviationSeconds === null ||
+    !Number.isFinite(timetableInstantMs) ||
+    !Number.isFinite(deviationSeconds)
+  ) {
+    return null;
+  }
+  // HFP dl is positive when the vehicle is *ahead* of its timetable, so the
+  // corrected arrival is timetable - dl (a tram 60 s ahead arrives 60 s
+  // earlier) - the same sign rule estimateNextArrival uses.
+  const etaMs = timetableInstantMs - deviationSeconds * 1000 - now;
+  return Math.max(0, Math.round(etaMs / 1000));
 }

@@ -1,6 +1,6 @@
 ---
 id: TV-0025
-status: READY
+status: REVIEW
 owner: agent
 gatekeeper: human
 required_approvals: []
@@ -181,3 +181,77 @@ What is true now, and what makes this more than a label swap:
 - `Docs/README.md` (referenced by `AGENTS.md`) does not exist; the owning
   documents are `Docs/digitransit.md`, `Docs/ADR/0002-data-transport.md` and
   `Docs/ADR/0004-vehicle-overview-page.md`.
+
+## Handoff (status: REVIEW → DONE — optional, delete before merge)
+
+Implemented at commit <tip>; branch `bb/tv-0025-popup-eta-to-the-next-stop-thr_9xa66mia8z`.
+
+**Live verification (2026-09-28, headless Chrome + CDP, all evidence labeled as
+live):**
+
+- **Countdown (A2):** popup on vehicle `40/75` (route `HSL:1010`), next stop
+  `Kansaneläkelaitos`: ETA **94 s at 08:01:10.5Z → 84 s at 08:01:20.5Z** — a
+  decrease of exactly 10.0 s over 10.0 s. Matched trip
+  `HSL:1010_20260928_Ma_2_1052` (18 stoptimes) confirmed from the network
+  response body.
+- **Model (R2) verified against the API's own numbers:** the trip's stoptime
+  for `Kansaneläkelaitos` (`HSL:1140441`) is `scheduledArrival` **39840 =
+  11:04:00** Helsinki (operating day `20260928` parsed from the trip gtfsId's
+  2nd component). 39840 − 76 (reported `dl`, *ahead* → subtracted) − now
+  (≈39669.5) ≈ 94.5 → **94 s**, the rendered value. The clamp is proven on a
+  second vehicle: `40/628` (dl −56, instant passed) rendered **0 s**, never a
+  negative.
+- **Overview cross-check (A3):** the overview for `40/75` showed
+  **Estimated arrival `—`** (its note: the messages for the stop carry no
+  timetable time; only stop events announce one) while the popup showed the
+  ETA. **Disclosed known limitation:** the popup's ETA derives from the
+  Routing API trip timetable (always available), the overview's estimate
+  needs the vehicle's own HFP `ttarr`/`ttdep` announcements, which arrive
+  only at/near the stop event — so the popup can show an ETA where the
+  overview shows `—`, and the two never disagree on a number the overview
+  can derive.
+- **Fallbacks (A4):** ~46 popup opens across three runs, all derivable (0
+  wild dashes) — the API matched every tracked vehicle. The muted dash was
+  exercised **live** by blocking the Routing API (CDP): the ETA cell showed
+  **`—` with `tram-hud-popup__metric-value--muted` (rgb(107,112,120) =
+  #6b7078)** and the explanation title, the deviation cell kept its value,
+  and `[tram-view] route patterns failed:` was logged per attempt. The next
+  stop row fell back to the bare id — TV-0023's own fallback, unchanged.
+- **Coverage (A5):** re-measured with the merged change, 45 s, **4 696**
+  sampled vp messages: populated next stop **42.0% → 100.0%**; agreement
+  when both present **1 970/1 970**; topic-only 2 726; neither 0. (The share
+  varies with traffic; the payload-only share measured 48.9% on 2026-09-26.)
+- **Streams (A6):** a map-only session (no navigation): **2 WebSocket
+  connections** before any popup (1 Vite dev HMR socket + 1 MQTT vp stream)
+  and **still 2, growth 0, closed 0** after 7 popup opens on 7 routes + 1
+  reopen. `RoutePatterns`: 6 POSTs for 7 opens (the reopened route served
+  from cache); `TramRoutes`: 1 (pre-existing). **Zero new WebSocket
+  connections attributable to the popup.**
+- **Heading removed (A7):** `hasHeadingLabel: false` in every popup read;
+  the marker rotor still points along the heading (`rotate(237deg)` etc.).
+  The overview hero renders the same four answers as before.
+
+**Checks:** `npm run format:check`, `npm run lint`, `npm run build` all green;
+`package.json` untouched; `dist/` deleted; `.env.local` deleted; dev server,
+Chrome, and the temp profile stopped; probes are throwaway in /tmp, not
+committed; the API key never printed or logged.
+
+**Known limitations:**
+
+- The shared `ROUTE_PATTERNS_QUERY` is also used by the overview's
+  `useVehicleTelemetry` (TV-0022 path), so each overview open now fetches
+  the heavier response (~15.7 KB measured vs 6.2 KB before, per route with
+  live vehicles) and drops it if the vehicle's route has no live trip.
+  Accepted to keep one shared query shape; say so in review if it should be
+  split instead.
+- `matchedTripTimetableInstant` prefers a differing `realtimeArrival`; live
+  today `realtimeArrival` never differs from `scheduledArrival` (measured
+  again: 6 live vehicles on route 1013), so the branch is dormant by
+  design.
+- The per-route load retry is per popup refresh (pending flag released on
+  failure, retried on the next snapshot's rebuild while the popup stays
+  open) — the same TV-0023 pattern stop names already use; failures are
+  logged per attempt and change nothing on screen.
+
+**Next agent:** reviewer only — judge `origin/main..origin/<branch>` against
+this file; the merge is the coordinator's, not mine.

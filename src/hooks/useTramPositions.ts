@@ -212,7 +212,13 @@ export function useTramPositions(): TramPositionsState {
                   ? "open"
                   : "closed",
             headsign: latest.headsign,
-            nextStopId: latest.stop !== null ? String(latest.stop) : null,
+            // TV-0025: the payload's stop field wins when present; the
+            // topic's level-13 next-stop id fills the roughly half of vp
+            // messages that omit it (the two agreed in every sample).
+            nextStopId:
+              latest.stop !== null
+                ? String(latest.stop)
+                : (latest.topicNextStopId ?? null),
             scheduleDeviation: latest.dl,
           });
         }
