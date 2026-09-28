@@ -11,6 +11,7 @@ providing an at-a-glance view of the state of the tram system.
 | ---- | ----------- |
 | [TV-0019](Tasks/TV-0019-tram-line-overlay.md) — `BLOCKED` | Tram line overlay on the basemap: source and scope undecided (`Decision requested` in the task) |
 | [TV-0024](Tasks/TV-0024-retire-debug-route-plumbing.md) — `READY` | Remove the TV-0016 debug route-resolution plumbing whose only consumer was the deleted debug popup |
+| [TV-0026](Tasks/TV-0026-popup-eta-day-anchor.md) — `READY` | Popup ETA correctness (user report 2026-09-28: some trams stuck at `0 s`, e.g. line 5 #650): anchor the matched trip's stop times to the day the tram is running, and show the muted `—` instead of `0` for a materially passed estimate |
 
 ## Completed work
 
@@ -54,4 +55,6 @@ ADR-0003). Open work is
 [TV-0019](Tasks/TV-0019-tram-line-overlay.md) (tram line overlay, blocked on a
 human decision) and
 [TV-0024](Tasks/TV-0024-retire-debug-route-plumbing.md) (remove the dead
-TV-0016 debug route-resolution plumbing).
+TV-0016 debug route-resolution plumbing) and
+[TV-0026](Tasks/TV-0026-popup-eta-day-anchor.md) (the popup's ETA anchored to
+the running day, so it stops printing a bogus `0 s`).
