@@ -183,7 +183,19 @@ script and raw logs in /tmp, quoted below):
   query=TramNetworkGeometry` — zero in the vehicle phase, zero in the return
   phase (the return redrew from the session cache: markers 106, overlay paths
   300). 134 raw lines saved; the overlay line is `#40 phase=load POST ... ->
-  200 93714B`.
+  200 93714B` (run 1) / `93608B` (run 2, after the round-1 fix below; same
+  query and structure).
+- Review round 1 (reviewer thr_cbd6tk7zsp, tip 50241a0) found the blocking
+  bug this task's first `draw()` had: casing and green polylines were
+  interleaved per pattern instead of all casings first, so a later pattern's
+  white casing could cover an earlier pattern's green line wherever patterns
+  overlap. Fixed by restructuring `draw()` into two passes (all casing
+  polylines over all routes/patterns, then all green polylines); re-verified
+  live: the renderer SVG's paint order has **0 violations** (every `#FFFFFF`
+  path precedes every `#00985F` path) at z11, z13 and z16, and every other
+  live checkpoint repeated green (one overlay request, 300 paths, path
+  identity 300/300, popup open/close, one MQTT socket per phase, zero console
+  errors).
 - Payload, measured from the response body captured off the app's own
   request: HTTP 200, 31 routes / 150 patterns / 25 319 coordinates,
   **861 404 bytes uncompressed** (the 93 714 B in the network line is the
@@ -215,7 +227,8 @@ script and raw logs in /tmp, quoted below):
   300 path elements were tagged with a DOM attribute after load and, after
   the pan, the two zooms (whose `zoomend` rewrites stroke-width in place)
   and ~30 snapshots, all 300 were still the same tagged elements.
-- Screenshots captured at z13, z16 and z11 (106 markers, 300 overlay paths at
+- Screenshots captured at z13, z16 and z11, recaptured after the round-1 fix
+  (105-106 markers, 300 overlay paths at
   each): **/tmp/tv0019-z13.png, /tmp/tv0019-z16.png, /tmp/tv0019-z11.png**.
   **I could not interpret them**: the model executing this task does not
   support images, so the visual judgement (corridors vs bus roads, casing
@@ -227,9 +240,10 @@ script and raw logs in /tmp, quoted below):
 - Styling/stacking verified against the DOM instead of visually: at z11/z13/
   z16 the 300 paths carry exactly `stroke #FFFFFF` ×150 / `#00985F` ×150 with
   widths 4/2, 5/2.5, 8/4 (the per-zoom table applied), the pane has inline
-  z-index 350 and computed `pointer-events: none`, and no path carries
+  z-index 350 and computed `pointer-events: none`, no path carries
   `leaflet-interactive` — the overlay cannot capture clicks (the DOM check,
-  not a click-through test).
+  not a click-through test) — and the paint order has 0 casing-over-green
+  violations (the DOM check, not a visual one).
 - The zoom-width table (z14-z19 values) is the code's statement, not a
   per-zoom measurement; z11/z13/z16 were observed in the DOM.
 - No-key degradation is reasoned from code (the loader is only called when

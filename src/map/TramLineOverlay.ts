@@ -78,8 +78,12 @@ export class TramLineOverlay {
       });
   }
 
-  /** Draws every returned pattern: all casing polylines first, then all
-   * green ones, so the green lines sit above every casing within the pane.
+  /** Draws every returned pattern in two passes: first every casing
+   * polyline over all routes/patterns, then every green polyline, so the
+   * green lines sit above every casing within the pane - Leaflet's SVG
+   * renderer paints later-inserted paths over earlier ones and does not
+   * reorder, so interleaving per pattern would let a later pattern's white
+   * casing cover an earlier pattern's green line wherever the two overlap.
    * One polyline per (route, directionId) pattern, every coordinate the API
    * reports, nothing simplified; a pattern with no coordinates draws
    * nothing (there is nothing to drop). A fresh options object per polyline:
@@ -87,29 +91,37 @@ export class TramLineOverlay {
    * no shared object is ever mutated across polylines. */
   private draw(routes: TramRouteGeometry[]): void {
     const width = tramLineWidths(this.map.getZoom());
+    const latlngs: [number, number][][] = [];
     for (const route of routes) {
       for (const pattern of route.patterns) {
         if (pattern.coordinates.length === 0) continue;
-        const latlngs = pattern.coordinates.map(
-          (coordinate) => [coordinate.lat, coordinate.lon] as [number, number],
-        );
-        this.casingPolylines.push(
-          L.polyline(latlngs, {
-            pane: TRAM_OVERLAY_PANE,
-            interactive: false,
-            color: TRAM_LINE_CASING_COLOR,
-            weight: width.casing,
-          }).addTo(this.map),
-        );
-        this.greenPolylines.push(
-          L.polyline(latlngs, {
-            pane: TRAM_OVERLAY_PANE,
-            interactive: false,
-            color: TRAM_LINE_COLOR,
-            weight: width.line,
-          }).addTo(this.map),
+        latlngs.push(
+          pattern.coordinates.map(
+            (coordinate) =>
+              [coordinate.lat, coordinate.lon] as [number, number],
+          ),
         );
       }
+    }
+    for (const points of latlngs) {
+      this.casingPolylines.push(
+        L.polyline(points, {
+          pane: TRAM_OVERLAY_PANE,
+          interactive: false,
+          color: TRAM_LINE_CASING_COLOR,
+          weight: width.casing,
+        }).addTo(this.map),
+      );
+    }
+    for (const points of latlngs) {
+      this.greenPolylines.push(
+        L.polyline(points, {
+          pane: TRAM_OVERLAY_PANE,
+          interactive: false,
+          color: TRAM_LINE_COLOR,
+          weight: width.line,
+        }).addTo(this.map),
+      );
     }
   }
 
