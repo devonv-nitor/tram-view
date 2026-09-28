@@ -13,7 +13,7 @@ polling) is recorded in
 | Tram vehicle positions (lat/lon, heading, speed, direction, route id, vehicle number) | HFP MQTT over WebSockets, `wss://mqtt.hsl.fi:443/`, topic `/hfp/v2/journey/ongoing/vp/tram/#` (push, ~1 update/s per vehicle) | not needed |
 | Tram line metadata (route id -> short name, mode) | Routing API v2 GraphQL, `POST https://api.digitransit.fi/routing/v2/hsl/gtfs/v1`, query `routes { gtfsId shortName mode }`, fetched once per session and cached | required |
 | One vehicle's full HFP event stream (position, stop events, doors, traffic-light priority) | same MQTT broker, filter `/hfp/v2/journey/ongoing/+/tram/<oper>/<veh>/#` - one vehicle, every event type (TV-0017) | not needed |
-| One line's stop sequences | Routing API v2 GraphQL, query `route(id: "HSL:<routeId>") { patterns { directionId headsign stops { gtfsId name lat lon } vehiclePositions { vehicleId } } }`, once per route per session and cached; which pattern is shown is chosen per vehicle from the API's own live-trip match (TV-0017, TV-0020) | required |
+| One line's stop sequences | Routing API v2 GraphQL, query `route(id: "HSL:<routeId>") { patterns { directionId headsign stops { gtfsId name lat lon } vehiclePositions { vehicleId trip { gtfsId stoptimes { scheduledArrival realtimeArrival stop { gtfsId } } } } } }`, once per route per session and cached; which pattern is shown is chosen per vehicle from the API's own live-trip match (TV-0017, TV-0020); TV-0025 adds each matched vehicle's trip and its stop times, which is the timetable the marker popup's ETA corrects by the reported deviation | required |
 | The line of a vehicle whose HFP route id is not a GTFS route id | Routing API v2 GraphQL, query `routes(ids: [<the indexed tram route ids>]) { gtfsId patterns { vehiclePositions { vehicleId } } }`, fetched only while such a vehicle is present and refreshed at most once per 60 s (TV-0022) | required |
 
 The positions subscription is anonymous. The line-metadata query and the
@@ -222,13 +222,16 @@ TV-0023: clicking or tapping a marker body opens a Leaflet popup bound to
 that marker (`src/map/TramMarkerPopup.ts`), so it follows the tram as it
 moves. It is the passenger-facing HUD the user chose from the design round
 (Tasks/mockups/mockup-01-hud-dashboard.html): a line badge, the vehicle key
-over the GTFS route key, a headsign pill, speed and heading side by side,
-door state and schedule deviation side by side, and the next stop. It is
+over the GTFS route key, a headsign pill, speed and ETA side by side (TV-0025
+replaced the Heading cell - the heading stays on the marker's direction
+rotor), door state and schedule deviation side by side, and the next stop. It is
 drawn in a dark shell - Leaflet's popup chrome is restyled under the
 `tram-hud-shell` class - and it **replaced** the TV-0016 debug readout rather
 than joining it. The next stop is the id the HFP payload reports (`stop`),
-resolved against the stop names of the route's patterns (the same cached
-per-session query the vehicle overview's spine uses, via
+with the HFP topic's level-13 next-stop id filling the roughly half of `vp`
+messages whose payload omits it (the two agreed in every sampled position;
+TV-0025), resolved against the stop names of the route's patterns (the same
+cached per-session query the vehicle overview's spine uses, via
 `loadRouteStopNames`); the bare id is the honest fallback until that load
 resolves and when it fails, and names are asked for only while a popup is
 open, once per route per session. Door state comes from `drst` bit 0, the
@@ -240,5 +243,32 @@ popup shows at a time, and closing is normal Leaflet behavior (× button, map
 click, Esc). It is presentation only: the popup reads the same state the
 markers render, never mutates it, and nothing is persisted. The native hover
 tooltip is untouched.
+
+TV-0025: the popup's ETA cell is the estimated time to the next stop, in
+whole seconds (`35 s`, `252 s` - seconds only, never `M:SS`). HFP `vp`
+payloads carry no timetable field, so the instant comes from the keyed
+Routing API: the extended per-route pattern query also carries each matched
+vehicle's trip with its stop times (`loadRoutePatterns`, shared with the
+stop-names load and the overview's spine), and the timetable instant for the
+next stop is that trip's stop time matched by bare stop id, anchored to the
+Europe/Helsinki midnight of the trip's operating day (the day is parsed from
+the trip's gtfsId; stop times are seconds since local midnight, not epoch).
+The corrected arrival is the timetable instant minus the *reported* `dl`
+(positive = ahead of timetable, so it is subtracted - the same model as the
+vehicle overview's `estimateNextArrival` in `src/lib/journey.ts`), rendered
+as `max(0, round(etaMs / 1000))` from `now` at render time, so the value
+counts down with the popup's snapshot rebuild and no second timer exists. A
+differing `realtimeArrival` is preferred when the API supplies one (measured
+2026-09-26: it never differs today). The value is an estimate and is
+labelled one: the cell carries an accessible one-line explanation (and a
+hover title) that the figure is the timetable corrected by the reported
+deviation, not a measurement. The muted "—" is the fallback when the
+vehicle has no live trip in the API's match, the trip has no stop time for
+the next stop, the reported deviation is missing, or the load has not
+resolved - never a guess. The patterns request happens only while a popup
+is open, once per route per session (cached per session alongside the
+stop-names load); there is **no second data stream** - no polling, no extra
+MQTT subscription, no new dependency (verified live 2026-09-28: the
+WebSocket connection count does not change across popup opens).
 While the tab is hidden, the position stream and the one-second snapshot tick pause
 entirely and resume on focus, so a hidden tab pulls no feed traffic.
