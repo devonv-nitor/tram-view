@@ -184,7 +184,14 @@ What is true now, and what makes this more than a label swap:
 
 ## Handoff (status: REVIEW → DONE — optional, delete before merge)
 
-Implemented at commit <tip>; branch `bb/tv-0025-popup-eta-to-the-next-stop-thr_9xa66mia8z`.
+Implemented at `4c4ef83` (code) + `f26df4a` (the Docs/digitransit.md update the
+code commit should have carried — its Files changed field wrongly claimed the
+doc); branch `bb/tv-0025-popup-eta-to-the-next-stop-thr_9xa66mia8z`.
+
+**Review round 1** (reviewer thr_nvvj7ub3s7, reviewed `4c4ef83`):
+CHANGES_REQUESTED — requirement 8 violated, `Docs/digitransit.md` untouched
+(genuine gap, fixed at `f26df4a`); every other requirement passed on the same
+review. Round 2 reviews `origin/main..f26df4a`.
 
 **Live verification (2026-09-28, headless Chrome + CDP, all evidence labeled as
 live):**
@@ -254,4 +261,5 @@ committed; the API key never printed or logged.
   logged per attempt and change nothing on screen.
 
 **Next agent:** reviewer only — judge `origin/main..origin/<branch>` against
-this file; the merge is the coordinator's, not mine.
+this file (round 2: the delta since `4c4ef83` is `Docs/digitransit.md` only);
+the merge is the coordinator's, not mine.
