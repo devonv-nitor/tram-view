@@ -431,10 +431,13 @@ export function subscribeTramPositions(handlers: {
       onMessage: (topic, payload) => {
         const position = parseHfpPosition(payload);
         if (position !== null) {
-          // TV-0023: enrich the position with the headsign from the topic.
+          // TV-0023: enrich the position with the headsign from the topic. An
+          // empty level (depot/deadhead runs publish one) is normalized to
+          // null so the popup shows its honest "—" instead of an empty pill.
           const topicParts = parseHfpTopic(topic);
           if (topicParts !== null) {
-            position.headsign = topicParts.headsign;
+            const headsign = topicParts.headsign.trim();
+            position.headsign = headsign === "" ? null : headsign;
           }
           handlers.onPosition(position);
         }

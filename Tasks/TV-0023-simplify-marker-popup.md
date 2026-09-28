@@ -178,18 +178,30 @@ light wrapper, tip, and close button are restyled for this one popup type.
 opening its doors refreshes the open popup. `src/lib/format.ts` gains
 `formatSpeedKmh` and `formatHeadingCompact`.
 
-**Evidence.** `npm run lint`, `npm run format:check`, `npm run build` all
-green. Live verification against the real feed (dev server + headless Chrome,
-390 px viewport, 106 trams): clicking a marker opened
-`.leaflet-popup.tram-hud-shell` with wrapper `rgb(15,17,20)`, radius `16px`,
-header `rgb(26,29,35)`, badge `1`, vehicle `40/73`, headsign `→ Käpylä` (topic),
-next stop `1020444` (payload), `#fcb919` next-stop border, doors `Closed` with
-the closed dot, `Speed=0 km/h`, `Heading=323° NW`, `Deviation=-420 s` in
-`#f87171`; the deviation is not repeated in the next-stop row. Computed-style
-checks confirmed every mockup color and the muted honest fallbacks
-(`—` for unreported speed/heading/doors/next-stop, `#6b7078` for unknown
-deviation).
+The next-stop row resolves the id to a name: `loadRouteStopNames`
+(`src/lib/digitransit.ts`) builds a bare-stop-id → name map from the route's
+patterns (reusing the cached `loadRoutePatterns` the overview already uses),
+and `TramMarkerLayer` asks for it only while a popup is open — one request per
+route per session — then rewrites the open popup when the names arrive
+(`popupHtml` / `nextStopName` / `ensureStopNames` / `refreshOpenPopups`). An
+empty HFP topic headsign segment is normalized to null
+(`src/lib/hfp.ts`), so the header pill shows the honest `—` rather than an
+empty "→ ".
 
-**Known limitations.** The next-stop row shows the bare HFP stop id when the
-stop name is not available to the map (the task allows this; resolving names
-needs the per-route pattern the overview fetches on demand).
+**Evidence.** `npm run lint`, `npm run format:check`, `npm run build` all
+green. Two live runs against the real feed (dev server + headless Chrome,
+390 px viewport, 104–106 trams): clicking a marker opened
+`.leaflet-popup.tram-hud-shell` with wrapper `rgb(15,17,20)`, radius `16px`,
+header `rgb(26,29,35)`, `#fcb919` next-stop border, doors `Closed` with the
+closed dot, `#f87171` deviation, and the deviation not repeated in the
+next-stop row; the row showed a resolved stop name (`Haapaniemi`, route 7,
+vehicle `40/461`) once the route's patterns arrived, and the bare id before
+that. Computed-style checks confirmed every mockup color, that the
+next-stop row never lacks a value, and the muted honest fallbacks (`—` for
+unreported speed/heading/doors/next-stop, `#6b7078` for unknown deviation).
+
+**Known limitations.** Stop names come from the route's patterns, so the row
+shows the bare HFP id until that one request per route resolves, and keeps it
+when the route has no patterns or the request fails (the design's stated
+fallback). The next stop comes from the payload's `stop` field, not the
+topic's next-stop level.

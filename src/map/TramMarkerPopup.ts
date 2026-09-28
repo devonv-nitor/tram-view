@@ -10,7 +10,11 @@
  * - Header: line badge (#fcb919) | vehicle key stacked over GTFS key | headsign pill
  * - Speed + Heading side by side
  * - Doors + Schedule deviation side by side
- * - Next stop row with a #fcb919 left accent border (deviation NOT repeated here)
+ * - Next stop row with a #fcb919 left accent border (deviation NOT repeated
+ *   here); the id the HFP payload reports is shown as the name the caller
+ *   resolved from the route's pattern when it has one, and as the bare id
+ *   when it does not (TramMarkerLayer resolves names lazily and rewrites the
+ *   open popup when they arrive)
  * - "Open vehicle overview →" nav link
  *
  * Presentation only - nothing here mutates the snapshot state. Content is
@@ -93,13 +97,21 @@ function deviationClass(tone: DeviationTone): string {
 }
 
 /** Builds the HUD dashboard popup HTML for one position. Every value that
- * originates in the feed is escaped at its insertion point. */
-export function buildTramPopupHtml(position: TramPosition): string {
+ * originates in the feed is escaped at its insertion point.
+ *
+ * `nextStopName` is the resolved name of the position's next stop (TV-0023),
+ * or null while the caller has none - the row then keeps the bare HFP id, so
+ * it is never empty and never invents a name. */
+export function buildTramPopupHtml(
+  position: TramPosition,
+  nextStopName: string | null = null,
+): string {
   const barTram = isSparakoffBarTram(position);
   const lineLabel = barTram
     ? SPARAKOFF_MARKER_LETTER
     : (position.routeShortName ?? "—");
   const deviation = describeDeviation(position.scheduleDeviation);
+  const nextStopLabel = nextStopName ?? position.nextStopId;
 
   return (
     `<div class="tram-hud-popup">` +
@@ -140,7 +152,7 @@ export function buildTramPopupHtml(position: TramPosition): string {
     // Next stop row with the #fcb919 left accent border (no deviation here)
     `<div class="tram-hud-popup__next-stop">` +
     `<span class="tram-hud-popup__next-stop-label">Next stop</span>` +
-    `<span class="tram-hud-popup__next-stop-value">${position.nextStopId !== null ? escapeHtml(position.nextStopId) : "—"}</span>` +
+    `<span class="tram-hud-popup__next-stop-value">${nextStopLabel !== null ? escapeHtml(nextStopLabel) : "—"}</span>` +
     `</div>` +
     // TV-0017: the popup's single navigation affordance
     `<p class="tram-hud-popup__nav"><a class="tram-hud-popup__link" href="${escapeHtml(
