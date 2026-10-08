@@ -92,14 +92,13 @@ export class PunctualityHeatmapLayer {
       "punctuality-heatmap-canvas",
     ) as HTMLCanvasElement;
     this.canvas.style.position = "absolute";
-    this.canvas.style.inset = "0";
     this.pane.appendChild(this.canvas);
 
     // The blobs are tied to geographic points: on any viewport change the
-    // canvas geometry is stale, so resize to the new viewport and redraw on
-    // the next update() (or immediately when a snapshot is already held).
+    // canvas geometry is stale, so re-place and re-size the canvas, then
+    // redraw immediately when a snapshot is already held.
     this.map.on("zoomend moveend resize", this.handleViewportChange, this);
-    this.resize();
+    this.reposition();
   }
 
   /** Re-renders the field for one snapshot. A new array arrives only when
@@ -116,7 +115,7 @@ export class PunctualityHeatmapLayer {
   }
 
   private handleViewportChange(): void {
-    this.resize();
+    this.reposition();
     // Redraw with the last snapshot so the field never sits empty after a
     // viewport change; the positions are held by the caller (MapView feeds
     // every tick), so the layer re-renders from them via the map events.
@@ -129,6 +128,21 @@ export class PunctualityHeatmapLayer {
    * for the next tick. */
   private lastPositions: TramPosition[] | null = null;
 
+  /** Places the canvas at the viewport's layer-space top-left with the
+   * viewport's layer-space size. The canvas lives inside the transformed
+   * map pane, so coordinates drawn on it are LAYER points; anchoring the
+   * canvas itself to the viewport's layer-space origin keeps the drawn
+   * layer-space geometry aligned with the screen (drawing container points
+   * onto a pane child would apply the pane's pan translation twice). */
+  private reposition(): void {
+    const topLeft = this.map.containerPointToLayerPoint([0, 0]);
+    L.DomUtil.setPosition(this.canvas, topLeft);
+    this.resize();
+  }
+
+  /** Sizes the canvas bitmap to the viewport (DPR-scaled) and records the
+   * viewport size. Called from reposition() on every viewport change; the
+   * size rarely changes, so the bitmap write is skipped when unchanged. */
   private resize(): void {
     const size = this.map.getSize();
     if (
@@ -139,12 +153,11 @@ export class PunctualityHeatmapLayer {
       return;
     }
     this.mapSize = size;
-    // The canvas covers the viewport 1:1; the DPR scaling below keeps the
-    // gradients crisp on retina displays.
-    this.canvas.width = size.x;
-    this.canvas.height = size.y;
-    this.canvas.style.width = `${size.x}px`;
-    this.canvas.style.height = `${size.y}px`;
+    // The bitmap is viewport-sized and DPR-scaled so gradients stay crisp
+    // on retina displays; the CSS size comes from
+    // .punctuality-heatmap-canvas (100% of the pane).
+    this.canvas.width = Math.round(size.x * dprSafe());
+    this.canvas.height = Math.round(size.y * dprSafe());
   }
 
   private render(positions: TramPosition[]): void {
@@ -154,10 +167,10 @@ export class PunctualityHeatmapLayer {
     const ctx = this.canvas.getContext("2d");
     if (ctx === null) return;
 
-    const dpr = window.devicePixelRatio || 1;
-    if (this.canvas.width !== size.x * dpr) {
-      this.canvas.width = size.x * dpr;
-      this.canvas.height = size.y * dpr;
+    const dpr = dprSafe();
+    if (this.canvas.width !== Math.round(size.x * dpr)) {
+      this.canvas.width = Math.round(size.x * dpr);
+      this.canvas.height = Math.round(size.y * dpr);
     }
     // Canvas transforms do not survive a width set, so re-scale each pass.
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -180,32 +193,29 @@ export class PunctualityHeatmapLayer {
       const color = dl < 0 ? BEHIND_COLOR : AHEAD_COLOR;
       const alpha = PEAK_ALPHA * t;
 
-      const point = this.map.latLngToContainerPoint([
-        position.lat,
-        position.lon,
-      ]);
+      const point = this.map.latLngToLayerPoint([position.lat, position.lon]);
+      // Cull against the viewport's layer-space rectangle: the canvas is
+      // anchored at the viewport's layer-space top-left (reposition()).
+      const topLeft = this.map.containerPointToLayerPoint([0, 0]);
       const radiusPx = this.metersToPixels(BLOB_RADIUS_M);
       if (
-        point.x < -radiusPx ||
-        point.x > size.x + radiusPx ||
-        point.y < -radiusPx ||
-        point.y > size.y + radiusPx
+        point.x < topLeft.x - radiusPx ||
+        point.x > topLeft.x + size.x + radiusPx ||
+        point.y < topLeft.y - radiusPx ||
+        point.y > topLeft.y + size.y + radiusPx
       ) {
         continue;
       }
-      const gradient = ctx.createRadialGradient(
-        point.x,
-        point.y,
-        0,
-        point.x,
-        point.y,
-        radiusPx,
-      );
+      // Canvas coordinates are layer points minus the canvas's own layer
+      // origin, so the drawn blob lands on the vehicle's geographic spot.
+      const cx = point.x - topLeft.x;
+      const cy = point.y - topLeft.y;
+      const gradient = ctx.createRadialGradient(cx, cy, 0, cx, cy, radiusPx);
       gradient.addColorStop(0, withAlpha(color, alpha));
       gradient.addColorStop(1, withAlpha(color, 0));
       ctx.fillStyle = gradient;
       ctx.beginPath();
-      ctx.arc(point.x, point.y, radiusPx, 0, Math.PI * 2);
+      ctx.arc(cx, cy, radiusPx, 0, Math.PI * 2);
       ctx.fill();
     }
   }
@@ -220,6 +230,12 @@ export class PunctualityHeatmapLayer {
       (40075016.686 * Math.cos((center.lat * Math.PI) / 180)) / 2 ** (zoom + 8);
     return meters / metersPerPixel;
   }
+}
+
+/** The current device pixel ratio (>= 1), read at call time so a
+ * cross-monitor drag re-scales correctly. */
+function dprSafe(): number {
+  return window.devicePixelRatio || 1;
 }
 
 /** #rrggbb -> rgba(r, g, b, a), one small helper so the color constants
