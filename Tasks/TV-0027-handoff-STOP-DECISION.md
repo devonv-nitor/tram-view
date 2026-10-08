@@ -1,15 +1,33 @@
-# TV-0027 — STOP-DECISION report to the coordinator (live verification evidence and the stacking discrepancy)
+# TV-0027 — STOP-DECISION: resolved 2026-10-08 (coordinator, user decision: accept the documented limitation)
 
 Date: 2026-10-08. Branch: `bb/worker-tv-0027-bottom-status-strip-thr_ee5b9d3bbffd4pWv`.
 Worktree: `/Users/dv/Dev/tram-view-wt-tv0027`. Main tree untouched.
 
-## Summary
+## Resolution
+
+**User decision 2026-10-08 (coordinator-routed): option 4 — keep z-index 640
+as implemented and decided, and document the measured stacking reality as a
+known limitation.** A popup anchored near the bottom-left can be overlapped
+by the strip's band; Leaflet's autoPan keeps naturally-anchored popups clear
+in practice. The strict "a popup is never covered" property needs the popup
+rendered outside the map pane (`MapView.tsx`/`TramMarkers.ts`), which is out
+of this task's allowed paths; it is **not** authorized now and is recorded
+as a potential future task (TV-0028 or later) if the user ever wants the
+strict guarantee.
+
+The resolution's effect on acceptance: requirement 5's z-index value (640)
+stands as implemented; the "popup never covered" property is satisfied by
+the documented limitation (autoPan + corner-band exposure only), which the
+coordinator accepted on the user's behalf. Requirement 5's outcome clause is
+superseded by this decision.
+
+## Original report (the measured evidence, unchanged)
 
 The TV-0027 strip is implemented, all checks pass, and live verification is
 done — **except one acceptance item, which the live measurement contradicts**:
 the strip does **not** always lose to an open marker popup, because Leaflet's
 `.leaflet-map-pane` is its own stacking context in this app (it always carries
-a `transform`, even at identity). This requires a coordinator decision before
+a `transform`, even at identity). This required a coordinator decision before
 review: the task's z-index requirement (5) as written does not produce its
 stated outcome ("an open marker popup is never covered by the strip") in the
 real DOM.
@@ -133,6 +151,8 @@ popup-panes-outside-the-map-pane fix as a follow-up task (it needs
 the strict guarantee, option 3 is the correct follow-up; it is out of this
 task's allowed paths.
 
+**RESOLVED 2026-10-08: option 4 chosen (see Resolution above).**
+
 ## Status
 
 - Branch tip (committed): `5e0c046` + the minute-precision fix awaiting
@@ -143,3 +163,14 @@ task's allowed paths.
   chosen option-B design, but requirement 5's stated outcome is not met in
   the live DOM).
 - No reviewer launched; task not marked DONE; nothing merged.
+
+## Post-resolution status (coordinator, 2026-10-08)
+
+- The STOP-DECISION is closed: option 4 accepted. The worker's branch has
+  been pushed as `7f936fe` (the amendment commit including this file's
+  resolution, the task file's superseded-requirement note, and the plan's
+  decision record). The worker is not resumed; the coordinator handled the
+  bookkeeping.
+- Next step under the 2026-10-08 flow: code review (user-chosen model,
+  `opper/gpt-5.6-sol`), then the dev-server manual review with the user,
+  then merge on approval.

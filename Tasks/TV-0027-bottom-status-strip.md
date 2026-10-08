@@ -82,6 +82,15 @@ untouched).
    overlap. Update the index.css comment that currently says the panel wins
    via DOM order. The ADR-0001 overlay order (tilePane < overlay <
    markerPane) is untouched.
+   **Superseded 2026-10-08 (user decision, routed by the coordinator):**
+   the outcome clause is not achievable as written - Leaflet's
+   `.leaflet-map-pane` is its own stacking context, so a root-level strip
+   cannot order against the panes' internal z-indexes. The implemented
+   value (640) stands; the "popup never covered" property holds via
+   Leaflet's autoPan for naturally-anchored popups, with the corner-band
+   overlap accepted as a documented limitation (full measurement and the
+   decision in Tasks/TV-0027-handoff-STOP-DECISION.md). The follow-up
+   (popup panes outside the map pane) is not authorized.
 6. **Variants.** Loading, connecting, and error keep the same strip shape and
    anchor. The error variant keeps its red border-color; the full error
    message must remain reachable - wrap within the strip (a second line is
