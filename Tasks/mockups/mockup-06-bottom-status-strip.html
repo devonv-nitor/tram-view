@@ -1,0 +1,512 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mockup 6 - Bottom-left status strip (TV-0027, option B)</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    background: linear-gradient(90deg, #dfe8e4 0%, #e7eee9 30%, #e3e9e0 55%, #d9e4e3 80%, #dde7e4 100%);
+  }
+  .map-fake {
+    position: absolute;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(255,255,255,0.9) 2px, transparent 2px),
+      linear-gradient(90deg, rgba(255,255,255,0.9) 3px, transparent 3px);
+    background-size: 48px 48px, 240px 240px;
+    opacity: 0.6;
+  }
+  .map-fake::after {
+    content: "";
+    position: absolute;
+    left: 8%;
+    top: 30%;
+    width: 70%;
+    height: 40%;
+    border: 6px solid #00985f;
+    border-top: none;
+    border-radius: 0 0 40% 40% / 0 0 90% 90%;
+    opacity: 0.55;
+  }
+</style>
+<style>
+  .zoom {
+    position: absolute;
+    top: 1rem;
+    left: 1rem;
+    z-index: 1000;
+    background: #fff;
+    border-radius: 4px;
+    box-shadow: 0 1px 5px rgba(0,0,0,0.3);
+    width: 26px;
+  }
+  .zoom a {
+    display: block;
+    text-align: center;
+    text-decoration: none;
+    color: #333;
+    font-size: 18px;
+    line-height: 26px;
+    border-bottom: 1px solid #ccc;
+  }
+  .zoom a:last-child { border-bottom: none; }
+  .attribution {
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    z-index: 1000;
+    background: rgba(255,255,255,0.8);
+    padding: 0 0.4em;
+    font-size: 11px;
+    color: #333;
+    white-space: nowrap;
+  }
+  .attribution a { color: #0078a8; }
+  .marker {
+    position: absolute;
+    z-index: 600;
+    width: 34px;
+    height: 30px;
+    margin: -15px 0 0 -17px;
+    border-radius: 9px 9px 9px 2px;
+    transform: rotate(-38deg);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #1a1a1a;
+    font-size: 12px;
+    font-weight: 600;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.4);
+  }
+  .marker--a { background: #fcb919; color: #1a1a1a; }
+  .marker--b { background: #00a664; color: #fff; }
+  .marker--c { background: #00bbe7; color: #1a1a1a; }
+  .marker--sparakoff { background: #eb4f49; color: #1a1a1a; }
+  .marker--offline { background: #fcb919; color: transparent; }
+  .marker--offline::after {
+    content: "";
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: #d32f2f;
+    box-shadow: 0 0 0 2px #fff;
+    transform: rotate(38deg);
+  }
+</style>
+<style>
+  .popup {
+    position: absolute;
+    z-index: 700;
+    width: 300px;
+    left: 3rem;
+    bottom: 4rem;
+  }
+  .popup__content {
+    position: relative;
+    background: #0f1114;
+    border: 1px solid #2a2d33;
+    border-radius: 15px 15px 0 0;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.6);
+  }
+  .popup__header {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.7rem 1.9rem 0.7rem 1rem;
+    background: #1a1d23;
+    border-bottom: 1px solid #2a2d33;
+    border-radius: 15px 15px 0 0;
+  }
+  .popup__badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 34px;
+    height: 34px;
+    padding: 0 0.35rem;
+    border-radius: 8px;
+    background: #fcb919;
+    color: #1a1a1a;
+    font-size: 1.05rem;
+    font-weight: 700;
+  }
+  .popup__ids { display: grid; flex: 1; min-width: 0; }
+  .popup__vehicle-key { color: #e0e2e6; font-size: 0.9rem; font-weight: 600; }
+  .popup__gtfs-key {
+    color: #6b7078;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 0.68rem;
+  }
+  .popup__headsign {
+    flex: none;
+    max-width: 100px;
+    padding: 0.2rem 0.55rem;
+    border-radius: 999px;
+    background: #2a2d33;
+    color: #b0b4bb;
+    font-size: 0.68rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .popup__body { padding: 0.75rem 1rem 0.85rem; }
+  .popup__row { display: flex; gap: 0.5rem; margin-bottom: 0.7rem; }
+  .popup__metric {
+    flex: 1;
+    padding: 0.45rem 0.6rem;
+    border-radius: 8px;
+    background: #1a1d23;
+  }
+  .popup__metric-label {
+    display: block;
+    color: #6b7078;
+    font-size: 0.6rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 0.15rem;
+  }
+  .popup__metric-value {
+    color: #e0e2e6;
+    font-size: 0.85rem;
+    font-weight: 600;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  .popup__metric-value--ontime { color: #fbbf24; }
+  .popup__metric-value--muted { color: #6b7078; }
+  .popup__close {
+    position: absolute;
+    top: 6px;
+    right: 8px;
+    color: #6b7078;
+    font-size: 14px;
+    text-decoration: none;
+  }
+  .popup__next-stop {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.55rem 0.65rem;
+    border-radius: 8px;
+    background: #1a1d23;
+    border-left: 3px solid #fcb919;
+  }
+  .popup__next-stop-label {
+    color: #6b7078;
+    font-size: 0.6rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .popup__next-stop-value { color: #e0e2e6; font-weight: 600; font-size: 0.95rem; }
+  .popup__nav { margin: 0.7rem 0 0; }
+  .popup__nav a { color: #fcb919; font-size: 0.75rem; text-decoration: none; }
+  .popup__tip {
+    margin: -1px auto 0;
+    width: 0;
+    height: 0;
+    border-left: 12px solid transparent;
+    border-right: 12px solid transparent;
+    border-top: 12px solid #0f1114;
+    filter: drop-shadow(0 3px 2px rgba(0,0,0,0.35));
+  }
+</style>
+<style>
+  .strip-anchor {
+    position: absolute;
+    left: 1rem;
+    bottom: 2.25rem;
+    z-index: 640;
+  }
+  .strip {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.45rem;
+    padding: 0.45rem 0.6rem 0.55rem;
+    border: 1px solid #d0d0d8;
+    border-radius: 0.8rem;
+    background: rgba(255,255,255,0.92);
+    color: #1a1a1a;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.18);
+    width: max-content;
+    max-width: calc(100vw - 12rem);
+    font-size: 12px;
+    line-height: 1;
+  }
+  .strip__row {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.55rem;
+  }
+  .strip__status {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    white-space: nowrap;
+  }
+  .strip__dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #137333;
+  }
+  .strip__time { color: #6b7078; }
+  .chips {
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+    row-gap: 0.35rem;
+    flex-wrap: wrap;
+    white-space: nowrap;
+  }
+  .chip { display: inline-flex; align-items: center; gap: 0.3rem; flex: none; }
+  .chip__swatch {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    flex: none;
+  }
+  .chip--a .chip__swatch   { background: #fcb919; }
+  .chip--b .chip__swatch   { background: #00a664; }
+  .chip--c .chip__swatch   { background: #00bbe7; }
+  .chip--unknown .chip__swatch { background: #5f6368; }
+  .chip--offline .chip__swatch {
+    background: #d32f2f;
+    box-shadow: 0 0 0 1.5px #fff;
+    margin-right: 2px;
+  }
+  .chip--sparakoff .chip__swatch { background: #eb4f49; }
+  .chip__count { font-weight: 600; font-variant-numeric: tabular-nums; }
+  .chip__label { color: #4a4d52; }
+  .strip__collapse {
+    flex: none;
+    position: absolute;
+    right: 0;
+    top: 50%;
+    margin-top: -12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    border: 1px solid rgba(26,26,26,0.25);
+    border-radius: 50%;
+    background: none;
+    color: #1a1a1a;
+    cursor: pointer;
+  }
+  .strip__collapse-chevron {
+    width: 7px;
+    height: 7px;
+    border-right: 2px solid currentColor;
+    border-bottom: 2px solid currentColor;
+    transform: rotate(45deg) translateY(-2px);
+  }
+  .chip--hidden { display: none; }
+  .pill {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.35rem;
+    width: max-content;
+    height: 36px;
+    padding: 0 0.9rem;
+    border: 1px solid rgba(26,26,26,0.4);
+    border-radius: 999px;
+    background: rgba(255,255,255,0.92);
+    color: #1a1a1a;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.18);
+    cursor: pointer;
+  }
+  .pill__dot { width: 8px; height: 8px; border-radius: 50%; background: #137333; }
+  .pill__count { font-weight: 700; font-size: 13px; font-variant-numeric: tabular-nums; }
+  .pill__chevron { font-size: 10px; color: #6b7078; }
+  .strip--error { border-color: #b3261e; color: #b3261e; }
+  /* 390px: the two-row shape is the launch shape at every width; the strip
+     simply clamps to the viewport so it never scrolls horizontally. The
+     legend never leaves its own row. */
+  @media (max-width: 460px) {
+    .strip { max-width: calc(100vw - 4.5rem); }
+    .popup { width: 260px; left: 0.75rem; bottom: 4rem; }
+  }
+  /* Demo chrome - not part of the design. */
+  .demo-bar {
+    position: absolute;
+    top: 1rem;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 4000;
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+    padding: 0.45rem 0.7rem;
+    border-radius: 999px;
+    background: rgba(15,17,20,0.85);
+    color: #e0e2e6;
+    font-size: 12px;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.35);
+  }
+  .demo-bar button {
+    padding: 0.3rem 0.7rem;
+    border: 1px solid #2a2d33;
+    border-radius: 999px;
+    background: #1a1d23;
+    color: #e0e2e6;
+    font: inherit;
+    cursor: pointer;
+  }
+  .demo-bar button:hover { background: #2a2d33; }
+  .demo-note {
+    position: absolute;
+    bottom: 0.4rem;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 4000;
+    color: rgba(0,0,0,0.45);
+    font-size: 11px;
+    white-space: nowrap;
+  }
+</style>
+</head>
+<body>
+  <div class="map-fake"></div>
+
+  <!-- Markers: category bodies per src/index.css; red dot = OOS (TV-0011). -->
+  <div class="marker marker--a" style="left: 62%; top: 18%;">1</div>
+  <div class="marker marker--b" style="left: 78%; top: 34%;">6</div>
+  <div class="marker marker--c" style="left: 22%; top: 40%;">2</div>
+  <div class="marker marker--a" style="left: 46%; top: 55%;">4</div>
+  <div class="marker marker--b" style="left: 30%; top: 66%;">8</div>
+  <div class="marker marker--offline" style="left: 55%; top: 72%;"></div>
+  <div class="marker marker--sparakoff" style="left: 68%; top: 12%;">K</div>
+
+  <!-- TV-0023 HUD popup near the strip: the popup (z-index 700) draws over
+       the strip (640) - the stacking decision this mockup demonstrates. -->
+  <div class="popup" id="popup">
+    <div class="popup__content">
+      <a class="popup__close" href="#" id="closeBtn">&#10005;</a>
+      <div class="popup__header">
+        <span class="popup__badge">5</span>
+        <div class="popup__ids">
+          <span class="popup__vehicle-key">40/450</span>
+          <span class="popup__gtfs-key">HSL:1005</span>
+        </div>
+        <span class="popup__headsign">&#8594; Katajanokka</span>
+      </div>
+      <div class="popup__body">
+        <div class="popup__row">
+          <div class="popup__metric">
+            <span class="popup__metric-label">Speed</span>
+            <span class="popup__metric-value">32 km/h</span>
+          </div>
+          <div class="popup__metric">
+            <span class="popup__metric-label">ETA</span>
+            <span class="popup__metric-value">35 s</span>
+          </div>
+        </div>
+        <div class="popup__row">
+          <div class="popup__metric">
+            <span class="popup__metric-label">Doors</span>
+            <span class="popup__metric-value">&#9679; Closed</span>
+          </div>
+          <div class="popup__metric">
+            <span class="popup__metric-label">Deviation</span>
+            <span class="popup__metric-value popup__metric-value--ontime">+12 s</span>
+          </div>
+        </div>
+        <div class="popup__next-stop">
+          <span class="popup__next-stop-label">Next stop</span>
+          <span class="popup__next-stop-value">Eira</span>
+        </div>
+        <p class="popup__nav"><a href="#">Open vehicle overview &#8594;</a></p>
+      </div>
+    </div>
+    <div class="popup__tip"></div>
+  </div>
+
+  <div class="zoom">
+    <a href="#" onclick="return false">+</a>
+    <a href="#" onclick="return false">&#8722;</a>
+  </div>
+  <div class="attribution">&#169; OpenStreetMap contributors &#183; Metroc Oy</div>
+
+  <!-- Strip: expanded by default on launch (the task shape). -->
+  <div class="strip-anchor" id="stripAnchor">
+    <div class="strip" id="strip">
+      <span class="strip__row">
+        <span class="strip__status">
+          <span class="strip__dot"></span>
+          <span>Live &#183; 87 trams &#183; <span class="strip__time">updated 14:32</span></span>
+        </span>
+        <button class="strip__collapse" id="btnCollapse" aria-label="Collapse the tram status strip" aria-expanded="true">
+          <span class="strip__collapse-chevron"></span>
+        </button>
+      </span>
+      <span class="chips">
+        <span class="chip chip--a"><span class="chip__swatch"></span><span class="chip__count">12</span><span class="chip__label">MLNRV</span></span>
+        <span class="chip chip--b"><span class="chip__swatch"></span><span class="chip__count">60</span><span class="chip__label">Artic</span></span>
+        <span class="chip chip--c"><span class="chip__swatch"></span><span class="chip__count">15</span><span class="chip__label">X54</span></span>
+        <span class="chip chip--offline"><span class="chip__swatch"></span><span class="chip__count">3</span><span class="chip__label">Not in service</span></span>
+        <span class="chip chip--unknown chip--hidden" id="chipUnknown"><span class="chip__swatch"></span><span class="chip__count">1</span><span class="chip__label">Unknown</span></span>
+        <span class="chip chip--sparakoff chip--hidden" id="chipSparakoff"><span class="chip__swatch"></span><span class="chip__count">1</span><span class="chip__label">Sp&#229;raKoff</span></span>
+      </span>
+    </div>
+  </div>
+
+  <!-- Collapsed pill: same anchor, the live count while live. -->
+  <div class="strip-anchor" id="pillAnchor" hidden>
+    <button class="pill" aria-expanded="false" aria-label="Show the live tram status strip, 87 trams">
+      <span class="pill__dot"></span>
+      <span class="pill__count">87</span>
+      <span class="pill__chevron">&#9650;</span>
+    </button>
+  </div>
+
+  <!-- Demo chrome - not part of the design. -->
+  <div class="demo-bar">
+    <span><strong>TV-0027</strong> &#8212; option B: bottom-left strip</span>
+    <button id="btnToggleStrip">Toggle collapse</button>
+    <button id="btnPopup">Toggle popup</button>
+    <button id="btn390">390px check</button>
+  </div>
+  <div class="demo-note">Static sketch - tokens mirror src/index.css; strip z-index 640, popup 700: the popup always wins.</div>
+
+<script>
+  // Demo wiring - not part of the design. The real toggle logic is the
+  // TV-0015 mechanism (per-session state, focus hand-off, aria-expanded).
+  var stripAnchor = document.getElementById("stripAnchor");
+  var pillAnchor = document.getElementById("pillAnchor");
+  var popup = document.getElementById("popup");
+  document.getElementById("btnToggleStrip").addEventListener("click", function () {
+    stripAnchor.hidden = !stripAnchor.hidden;
+    pillAnchor.hidden = !pillAnchor.hidden;
+  });
+  document.getElementById("btnPopup").addEventListener("click", function () {
+    popup.hidden = !popup.hidden;
+  });
+  document.getElementById("btn390").addEventListener("click", function () {
+    document.documentElement.style.maxWidth = "390px";
+    document.documentElement.style.margin = "0 auto";
+    document.documentElement.style.outline = "2px solid #b3261e";
+  });
+  document.getElementById("btnCollapse").addEventListener("click", function (e) {
+    stripAnchor.hidden = true;
+    pillAnchor.hidden = false;
+  });
+  pillAnchor.querySelector("button").addEventListener("click", function () {
+    stripAnchor.hidden = false;
+    pillAnchor.hidden = true;
+  });
+  document.getElementById("closeBtn").addEventListener("click", function (e) {
+    e.preventDefault();
+    popup.hidden = true;
+  });
+</script>
+</body>
+</html>
