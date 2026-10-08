@@ -35,8 +35,15 @@ tall). The panel mounts inside MapPage's `.app` after `<MapView />`
 User decision 2026-10-08: option B of a three-option design round (A compact
 bottom-left card, B single-row status strip, C dark bottom-center dock) -
 **B, the single-row strip**: the info visible on launch, moved to the bottom,
-more compact. The round also established the stacking fix: the strip drops
-below the popup pane so an open popup is never covered.
+more compact. The design round also established a stacking intent for the
+strip: drop it below the popup pane so an open popup is never covered.
+**Superseded:** that stacking property proved unachievable after
+implementation (Leaflet's `.leaflet-map-pane` is its own stacking context -
+the STOP-DECISION below), and the user accepted option 4 on 2026-10-08: the
+strip keeps z-index 640, a popup overlapping the strip's corner band may be
+covered, and autoPan keeps naturally-anchored popups clear. The stacking
+requirement 5 below carries the amendment; the pre-STOP-DECISION text here is
+kept only as labeled history.
 
 Design source: `Tasks/mockups/mockup-06-bottom-status-strip.html`, iterated
 with the user 2026-10-08 (two-row layout: centered status row with the
@@ -53,16 +60,18 @@ untouched).
    clearance). One shared anchor rule for both states stays (the TV-0015
    mechanism, comment updated). The strip stays inside MapPage's `.app`,
    after `<MapView />`.
-2. **Live-state shape.** One row, ~36-40 px tall, full content visible on
-   launch without interaction, same color-scheme-aware surface as today:
-   the status segment (dot, `Live · N trams · updated HH:MM` - minute
-   precision is the width choice, the per-snapshot render cadence unchanged)
-   followed by the legend as inline chips - one chip per always-present
+2. **Live-state shape.** Two rows (matching the mockup, iterated with the
+   user): row 1 the centered status segment (dot, `Live · N trams · updated
+   HH:MM` - minute precision is the width choice, the per-snapshot render
+   cadence unchanged) with the collapse button pinned to the row's right
+   edge, row 2 the legend as inline chips - one chip per always-present
    category (A/B/C counts), the Unknown and SpåraKoff chips only while
    present (never a zero-count row, TV-0014/TV-0013 logic unchanged), and
    the always-present red-dot chip with its live count (TV-0011; the
    out-of-service trams are excluded from the category chips so nothing
-   double-counts - the status line's total equals the sum of the chips).
+   double-counts - the status line's total equals the sum of the chips);
+   full content visible on launch without interaction, the same
+   color-scheme-aware surface as today.
 3. **Chip labels.** Short display labels - MLNRV, Artic, X54, Unknown,
    SpåraKoff, Not in service - with the full `fleet.ts` label (or
    `Not in service (shunting/testing)`) on the chip's `title`.
@@ -107,8 +116,11 @@ untouched).
    implementation follows it.
 9. **Docs.** `Docs/digitransit.md`'s panel prose (the "Verifying the data
    flow" section and the TV-0015 paragraph) is updated: bottom-left strip,
-   chips, minute-precision time, collapse-to-pill, the popup-wins stacking
-   note; the superseded top-right text is removed. No ADR amendment is
+   chips, minute-precision time, collapse-to-pill, the documented stacking
+   limitation (popup-wins only for naturally-anchored popups via Leaflet's
+   autoPan; a popup overlapping the strip's corner band may be covered by
+   the strip - the accepted limitation, STOP-DECISION resolved as option 4);
+   the superseded top-right text is removed. No ADR amendment is
    needed - presentation-only within ADR-0001's rendering scope, no map-layer
    order change.
 10. **Guard rails.** Only `src/components/TramStatusPanel.tsx`,
@@ -128,9 +140,11 @@ untouched).
 3. Live verification (dev server + headless Chrome, ~1-2 min window):
    - On load, with no interaction, the strip is visible at the bottom-left
      with live counts (capture a screenshot).
-   - Click a marker - including one whose popup opens near the bottom-left -
-     the popup's full content (header row, metrics, next stop, link) is
-     visible, not covered by the strip (capture evidence).
+   - A naturally-anchored popup near the bottom-left opens clear of the
+     strip - autoPan keeps it off the strip (capture evidence). A popup
+     overlapping the strip's corner band is covered by the strip; that
+     overlap is the accepted documented limitation (STOP-DECISION resolved
+     as option 4, 2026-10-08), not a failure.
    - The legend counts update as snapshots change (observe ≥2 distinct
      values in the window).
    - 390 px viewport: no strip/attribution overlap, no horizontal scroll
