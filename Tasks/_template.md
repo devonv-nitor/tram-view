@@ -35,14 +35,16 @@ assume. State what is true NOW so the worker does not re-derive it.>
 
 ## Acceptance
 
-<Numbered, verifiable checks. Every check must state what evidence counts:
-- live verification: what to capture, over what window, with what tool
-- honest-fallback rules: if the live event cannot be observed, what
-  synthetic/code-review substitute is acceptable, and that it must be
-  DISCLOSED as such rather than implied
-- the standard checks: `npm run lint`, `npm run format:check`,
-  `npm run build` green; no `package.json` change unless disclosed; key
-  discipline unchanged (never print/commit the API key, delete `dist/`)
+<Numbered, verifiable checks. The default flow: the worker gets
+`npm run lint`, `npm run format:check`, and `npm run build` green (plus any
+test the task names) and the reviewer may assume that; the user verifies the
+running app manually on the dev server (what to look for, concretely, so a
+human can check it in a minute); the coordinator merges on approval. State
+when browser automation or one-off driver scripts are justified - only for
+behavior that cannot be checked by the build/tests or by eye - and what
+their evidence counts, and honest-fallback rules: if the live event cannot
+be observed, what synthetic/code-review substitute is acceptable, and that
+it must be DISCLOSED as such rather than implied.>
 
 ## Notes
 
@@ -52,5 +54,8 @@ file. Omit if empty — do not pad.>
 
 ## Handoff (status: REVIEW → DONE — optional, delete before merge)
 
-<Only current, necessary handoff information for the next agent. Git owns
+<Only current, necessary handoff information for the next agent: the
+STOP-DECISION, if any (stated in full — smallest decision needed, affected
+boundary, options — so the coordinator can route it to the user); the
+manual-review checklist if it grew beyond the acceptance section. Git owns
 history; do not duplicate the execution log here.>

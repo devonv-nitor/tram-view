@@ -13,34 +13,42 @@ handoff. An accepted ADR is authority to implement its decision.
 
 ## Agent coordination
 
-- Execute work with parallel subagents. Default worker provider is Pi with
-  Lyceum `lyceum/z-ai/glm-5.3-flash` and thinking at max reasoning; restart
-  an agent on failure. Never switch to Claude without explicit human authorization.
-- The coordinator merges completed work once its reviewer PASS and required
-  hosted checks are green; that standing authorization satisfies task
-  `gatekeeper: human/user` fields (user decision 2026-09-15). Workers stop at
-  REVIEW and never merge their own branches.
-- After parallel merges, per-branch PASS and hosted checks do not prove the
-  integrated result: a rebase can break another branch's acceptance flow or
-  drop changes (e.g. an exec bit) that every per-branch run passed. The
-  coordinator has a reviewer explicitly review each merge delta — the
-  previous and new `origin/main` tips, reported and verified like any
-  review — before the wave is done, and routes findings back to the
-  responsible worker.
+- The flow (user decision 2026-10-08, replacing the heavier verification
+  process): the coordinator designs the task, the worker implements to a
+  green build, a reviewer reads the code, the human verifies the running
+  app, and the coordinator merges on approval. Browser automation and
+  one-off driver scripts are the exception, not the default - this is a
+  small app, and the human's eye replaces scripted browser drives.
+- The coordinator designs work: writes the task file (next free TV id, per
+  the template), settles the design with the user before implementation, and
+  dispatches workers in parallel only when tasks are independent.
+- The worker implements only the task's allowed paths with one end goal: the
+  task's checks green (`npm run lint`, `npm run format:check`, `npm run
+  build`, plus any test the task names). The worker commits, pushes its
+  branch, and stops at REVIEW; it never merges its own branch and does not
+  spin up a browser, write one-off driver scripts, or screenshot the app -
+  unless the task file explicitly justifies automated live verification for
+  behavior that cannot be checked by the build/tests or by eye.
+- After parallel merges, per-branch PASS does not prove the integrated
+  result: a rebase can break another branch's acceptance flow or drop
+  changes (e.g. an exec bit) that every per-branch run passed. After merging
+  a wave, the coordinator starts the dev server on the merged result and
+  asks the user to re-verify the integrated app (the same human-verification
+  gate as a single task), and routes regressions back to a new task.
 - Agents report roadblocks, errors, and requests for assistance to the
   coordinator instead of idling. Once their work is complete they report to
-  their subagent or parent and stop; no agent runs idle.
+  their parent and stop; no agent runs idle.
 - The coordinator stops a thread as soon as its role ends — work merged,
   agent superseded, or task reassigned — and never leaves agents idle.
-  Reviewer children are parented to the worker that will act on their
-  findings; when a worker is replaced, its reviewers are stopped with it and
-  their findings are relayed to the successor explicitly. Queued messages
-  are never the handoff mechanism: a delivered message wakes a stopped
-  thread, so nothing of value is left queued on a dying thread.
-- On completion an agent launches a reviewer child: default Claude Code
-  `claude-opus-5[1m]` at medium thinking. The worker's
-  review request reports the exact origin tip SHA to review. Reviewers judge
-  the diff (not the agent's report) against the task's requirements.
+  Queued messages are never the handoff mechanism: a delivered message wakes
+  a stopped thread, so nothing of value is left queued on a dying thread.
+- On a worker's REVIEW report the coordinator spawns a reviewer (the user
+  names the model per review; none is defaulted). The reviewer judges the
+  code only: it may assume the build and checks are green — the worker
+  attested that — and spends its effort on whether the diff implements the
+  task's requirements, matches the approved design, and stays inside the
+  allowed paths. It does not run the app, spin up browsers, or re-run
+  checks.
 - Reviewers judge only what is on the remote. At the start of every review
   turn run `git fetch origin --prune`, then verify `git rev-parse
   origin/<branch>` equals the reported tip SHA; a missing branch is a
@@ -50,17 +58,27 @@ handoff. An accepted ADR is authority to implement its decision.
   checkout, or chat-pasted diff: force-pushes and unfetched refs make every
   name a cache, and only the SHA is immutable. Every verdict states the ref
   and SHA it reviewed.
-  Reviewers always report their verdict to their parent worker, then stop.
-  On PASS the worker stops and reports the PASS to the coordinator; on
-  CHANGES_REQUESTED the worker implements the requested changes and starts a
-  new reviewer.
+  Reviewers report their verdict (PASS or CHANGES_REQUESTED, with numbered
+  file:line findings) to the coordinator, then stop. On CHANGES_REQUESTED
+  the coordinator routes the findings to the worker, or redesigns the task
+  if the finding is in the design; the loop repeats.
+- On PASS the coordinator starts the local dev server and asks the user to
+  review the running app: the prompt carries a short summary of what changed
+  and a checklist of what to verify manually. If the user approves, the
+  coordinator merges and pushes to GitHub — that approval is the merge
+  authorization, no further sign-off needed. If the user rejects, the
+  coordinator turns the user's observations into a redesign (new or updated
+  task) and the loop repeats from implementation.
 
 ## Task flow and evidence
 
 Use `BLOCKED`, `READY`, `IN_PROGRESS`, `REVIEW`, `CHANGES_REQUESTED`, and `DONE`.
-For a ready task: mark `IN_PROGRESS`, implement only its allowed paths, run its
-checks plus relevant live verification, self-review the diff, then mark `REVIEW`
-and `DONE` when acceptance is met. Serialize repository writes. Delete the task from `tasks/` and `PLAN.md` after completion.
+For a ready task: the coordinator marks `IN_PROGRESS` (in the worker's
+branch), the worker implements only the task's allowed paths, gets the
+checks green, self-reviews the diff, and pushes the branch — the coordinator
+then marks `REVIEW`. After the reviewer's PASS, the user verifies the
+running app; on approval the coordinator merges and marks `DONE`. Serialize
+repository writes. Delete the task from `tasks/` and `PLAN.md` after completion.
 
 New task files follow [Tasks/_template.md](Tasks/_template.md): copy it (do not
 edit it in place), name the copy `Tasks/TV-XXXX-short-slug.md` with the next
