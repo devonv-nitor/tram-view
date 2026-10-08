@@ -62,86 +62,241 @@ body {
   height: 100%;
 }
 
-/* TV-0015: the collapsed panel's circle button shares the expanded panel's
-   exact top-right anchor - one spot, two states - so the anchor is a single
-   shared rule. */
+/* TV-0027: the status strip and its collapsed pill share one bottom-left
+   anchor - one spot, two states - so the anchor is a single shared rule,
+   as TV-0015 established for the old panel. The strip still sits after
+   <MapView /> in the JSX (App.tsx). The strip sits above the map pane's
+   subtree (its stacking context - see the z-index note below) and below
+   the control containers. */
 .debug-panel,
 .debug-panel-toggle {
   position: absolute;
-  top: 1rem;
-  right: 1rem;
-  /* Leaflet control containers also use z-index 1000; the panel wins only
-     via DOM order, so keep the panel after <MapView /> in the JSX. */
-  z-index: 1000;
+  left: 1rem;
+  /* TV-0027 (measured in Chrome 141, 1280x800): the attribution band is
+     ~21px tall, so 2.25rem leaves ~15px of map between it and the strip.
+     2.25rem is also the task mockup's value. */
+  bottom: 2.25rem;
+  /* TV-0027: the strip sits above the map pane's subtree and below the
+     control containers (1000). MEASURED in Chrome 155 (this app's live DOM):
+     Leaflet's .leaflet-map-pane always carries a transform (its zoom
+     machinery), so it is its own stacking context and the panes' internal
+     z-indexes (marker 600 < tooltip 650 < popup 700) order only INSIDE it.
+     The strip - a sibling of .map-view under .app - competes with the map
+     pane's root-level tier (400): any strip z-index above 400 paints above
+     the whole map subtree (tiles, markers, and popups alike); anything at
+     or below 400 hides the strip under the basemap. 640 keeps the strip
+     above the map (it covers markers in its own corner, as the top-right
+     panel did) - the price is that a popup overlapping the strip's corner
+     band is covered too (Leaflet's autoPan keeps a naturally-anchored popup
+     clear; only a tram driving into the strip's corner with its popup open
+     overlaps, hiding the popup's last rows under the strip). An open popup
+     guaranteed above the strip needs the popup rendered outside the map
+     pane's subtree (a MapView/TramMarkers change) - STOP-DECISION
+     2026-10-08, see Tasks/TV-0027-bottom-status-strip.md's handoff. */
+  z-index: 640;
 }
 
+/* TV-0027: the expanded strip. Two rows - the centered status row and the
+   legend chips - shrink-to-fit, clamped to the viewport so the wrap stays
+   inside the strip and the page never scrolls horizontally. The color
+   scheme is tracked like the old panel: Canvas/CanvasText keep the text
+   readable in dark mode over the always-light tiles. */
 .debug-panel {
-  padding: 1rem 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  padding: 0.45rem 0.6rem 0.55rem;
   border: 1px solid #d0d0d8;
-  border-radius: 8px;
-  /* TV-0010: fixed width - the live line's clock re-renders every second
-     and shrink-to-fit made the panel breathe a few px per second. 24rem
-     fits the widest expected content (the live line at triple-digit tram
-     counts plus the locale time, and the longest legend label) with
-     margin; the error variant's long message just wraps inside it. */
-  width: 24rem;
-  /* Keep clear of the top-left zoom control on narrow viewports (TV-0002
-     merge review); this responsive ceiling still clamps the fixed width. */
-  max-width: min(24rem, calc(100% - 8rem));
-  /* Stay above the OSM attribution band at the bottom edge. */
-  max-height: calc(100% - 4rem);
-  overflow: auto;
-  /* Track color-scheme so panel text stays readable in dark mode. */
-  background: Canvas;
+  border-radius: 0.8rem;
+  background: color-mix(in srgb, Canvas 92%, transparent);
   color: CanvasText;
-  text-align: left;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.18);
+  width: max-content;
+  /* The mockup's clamp: the strip never grows past the viewport, so the
+     wrap stays inside the strip and the page never scrolls horizontally;
+     on phones (the overview page's 390 px case) the clamp relaxes so the
+     chips still fit on their row. */
+  max-width: calc(100vw - 12rem);
+  font-size: 12px;
+  line-height: 1;
 }
 
+/* TV-0027, the mockup's phone clamp (max-width 460px): the strip may use
+   nearly the full width so the chips fit; it still clears the attribution
+   vertically (the anchor's bottom offset is unchanged). */
+@media (max-width: 460px) {
+  .debug-panel {
+    max-width: calc(100vw - 4.5rem);
+  }
+}
+
+/* Error variant (TV-0004): the red border stays, the heading carries the
+   red so the variant is readable on the strip's Canvas; the message text
+   itself inherits the strip's normal CanvasText so the long reason stays
+   readable, and it wraps within the strip (second line fine - never
+   clipped). */
 .debug-panel--error {
   border-color: light-dark(#b3261e, #f2b8b5);
   color: light-dark(#b3261e, #f2b8b5);
 }
 
-/* TV-0015: the header row holds the status line (or the error heading, or
-   the progress text) plus the one-click collapse button; it is the only
-   structural addition to the expanded panel. */
-.debug-panel__header {
+/* TV-0027: both rows keep the strip's shape on every variant. The status
+   row centers its content (the mockup's centered status line) while the
+   collapse button stays pinned to the row's right edge; the chips row
+   starts at the left edge and its chips wrap inside their own row. Rows
+   are content-height (the mockup: the strip is the two rows' height plus
+   padding), so the loading/connecting/error variants keep the same shape. */
+.debug-panel__row {
+  position: relative;
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  justify-content: center;
+  gap: 0.55rem;
 }
 
-.debug-panel__status {
-  /* TV-0015: the status line fills the header row next to the collapse
-     button, so its layout inside the expanded panel is unchanged. */
-  flex: 1 1 auto;
+.debug-panel__chips {
   display: flex;
   align-items: center;
+  gap: 0.55rem;
+  row-gap: 0.35rem;
+  flex-wrap: wrap;
+  /* The chips row is a real <ul> again (the TV-0009 legend's role); the
+     list reset keeps it chip-shaped. */
+  list-style: none;
   margin: 0;
+  padding: 0;
+}
+
+/* TV-0027: the status line - dot, "Live · N trams · updated HH:MM" - is
+   centered in the status row; minute precision (not the locale default's
+   seconds) is the mockup's width choice, so the minute cell never breathes
+   a px per second like the TV-0010 panel did. */
+.debug-panel__status {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0;
+  white-space: nowrap;
 }
 
 .status-dot {
   flex: none;
   width: 8px;
   height: 8px;
-  margin-right: 0.5rem;
   border-radius: 50%;
   background: light-dark(#137333, #34d399);
 }
 
-/* Collapse button (TV-0015): the one-click affordance in the expanded
-   panel's header row. 28px round target - above the 24px WCAG 2.5.8
-   minimum; the >=40px comfortable target is the collapsed circle below,
-   the primary affordance while collapsed. Transparent on the panel
-   background; the hairline border marks the target like the legend
-   swatches. */
+.debug-panel__time {
+  /* Muted scheme-aware tone (62% CanvasText over the Canvas surface): the
+     strip tracks the color scheme like the old panel (its text was plain
+     CanvasText), so the fixed-mockup gray must not survive dark mode. */
+  color: color-mix(in srgb, CanvasText 62%, transparent);
+}
+
+/* Error heading (TV-0027): "Tram data error" replaces the status line's
+   dot and text, like the old panel's h2; the red comes from the variant
+   rule above. */
+.debug-panel__heading {
+  font-size: inherit;
+  font-weight: 600;
+  margin: 0;
+  white-space: nowrap;
+}
+
+/* Error message (TV-0027): normal text ink on the error strip so the long
+   reason text stays readable; the heading carries the variant's red. The
+   message may wrap to a second line inside the strip - never clipped. */
+.debug-panel__error-message {
+  margin: 0;
+  color: CanvasText;
+  white-space: normal;
+}
+
+/* Loading and connecting text (TV-0027): same muted scheme-aware tone as
+   the status line's timestamp. */
+.debug-panel__progress {
+  margin: 0;
+  color: color-mix(in srgb, CanvasText 62%, transparent);
+  white-space: nowrap;
+}
+
+/* TV-0027 chips: the legend as inline chips (swatch + count + short
+   label), one per present category, in the chips list (the aria-label
+   needs a role to be announced). The swatch keeps the hairline border from
+   the old legend so every hue stays visible on the strip's Canvas in dark
+   mode; the count is tabular so digit changes do not reflow the row. */
+.debug-panel__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  flex: none;
+}
+
+.debug-panel__chip-swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex: none;
+  border: 1px solid color-mix(in srgb, CanvasText 25%, transparent);
+}
+
+.debug-panel__chip--a .debug-panel__chip-swatch {
+  background: var(--tram-type-a);
+}
+
+.debug-panel__chip--b .debug-panel__chip-swatch {
+  background: var(--tram-type-b);
+}
+
+.debug-panel__chip--c .debug-panel__chip-swatch {
+  background: var(--tram-type-c);
+}
+
+.debug-panel__chip--unknown .debug-panel__chip-swatch {
+  background: var(--tram-type-unknown);
+}
+
+.debug-panel__chip--sparakoff .debug-panel__chip-swatch {
+  background: var(--tram-type-sparakoff);
+}
+
+/* Out-of-service chip (TV-0011): the red dot mirrors the marker's
+   not-in-service dot, with a white ring standing in for the marker body
+   color behind it (the mockup's chip look). */
+.debug-panel__chip--offline .debug-panel__chip-swatch {
+  background: var(--tram-type-offline);
+  border-color: #fff;
+}
+
+.debug-panel__chip-count {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Chip label: the same muted scheme-aware tone as the timestamp - the
+   fixed-mockup gray must not survive dark mode. The swatches themselves
+   stay fixed (they carry the marker hues). */
+.debug-panel__chip-label {
+  color: color-mix(in srgb, CanvasText 62%, transparent);
+}
+
+/* Collapse button (TV-0015, pinned by TV-0027): absolutely pinned to the
+   status row's right edge, 24px round - the WCAG 2.5.8 minimum the mockup
+   sets; the >=40px comfortable target is the collapsed pill below, the
+   primary affordance while collapsed. Transparent on the strip background;
+   the hairline border marks the target. */
 .debug-panel__collapse {
+  position: absolute;
+  right: 0;
+  top: 50%;
+  margin-top: -12px;
   flex: none;
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 1.75rem;
-  height: 1.75rem;
+  width: 1.5rem;
+  height: 1.5rem;
   padding: 0;
   border: 1px solid color-mix(in srgb, CanvasText 25%, transparent);
   border-radius: 50%;
@@ -151,48 +306,67 @@ body {
 }
 
 /* CSS-drawn chevron (TV-0015): a square's right+bottom borders rotated so
-   the corner points down in the expanded header (collapse) and up on the
-   collapsed circle (expand). Drawn in CSS instead of a text or emoji glyph
-   so it renders identically on every platform. */
+   the corner points down in the expanded status row (collapse) and up on
+   the collapsed pill (expand). Drawn in CSS instead of a text or emoji
+   glyph so it renders identically on every platform. */
 .debug-panel__collapse-chevron,
 .debug-panel-toggle__chevron {
-  width: 8px;
-  height: 8px;
+  width: 7px;
+  height: 7px;
   border-right: 2px solid currentColor;
   border-bottom: 2px solid currentColor;
 }
 
 .debug-panel__collapse-chevron {
-  transform: rotate(45deg);
+  transform: rotate(45deg) translateY(-2px);
 }
 
 .debug-panel-toggle__chevron {
   transform: rotate(-135deg);
 }
 
-/* Collapsed circle (TV-0015): 40px round so the hit area is the circle
-   itself (the task's >=~40px target). Semi-transparent Canvas keeps it
-   color-scheme aware like the panel while letting the map show through;
-   the soft shadow separates it from the tiles like the markers. Shows the
-   live tram count while the client is live (worker's choice, documented in
-   the task evidence), else the expand chevron above. */
+/* Collapsed pill (TV-0027): the one-click affordance at the same bottom-
+   left anchor. Nearly-opaque Canvas keeps it color-scheme aware like the
+   strip while letting a hint of the map show through; the soft shadow
+   separates it from the tiles like the markers. Shows the live tram count
+   while the client is live (the TV-0015 worker's choice, restyled per the
+   mockup) - the one thing the strip surfaces at a glance; the expand
+   chevron shows while loading, connecting, or errored. */
 .debug-panel-toggle {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 2.5rem;
-  height: 2.5rem;
-  padding: 0;
-  border: 1px solid color-mix(in srgb, CanvasText 25%, transparent);
-  border-radius: 50%;
-  background: color-mix(in srgb, Canvas 70%, transparent);
+  gap: 0.35rem;
+  width: max-content;
+  height: 2.25rem;
+  padding: 0 0.9rem;
+  border: 1px solid color-mix(in srgb, CanvasText 40%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, Canvas 92%, transparent);
   color: CanvasText;
   font: inherit;
-  font-size: 0.75rem;
-  font-weight: 600;
+  font-size: 0.8125rem;
+  font-weight: 700;
   font-variant-numeric: tabular-nums;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.18);
   cursor: pointer;
+}
+
+.debug-panel-toggle__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: light-dark(#137333, #34d399);
+}
+
+.debug-panel-toggle__count {
+  font-variant-numeric: tabular-nums;
+}
+
+.debug-panel-toggle__chevron {
+  /* Muted scheme-aware tone like the strip's other secondary text (the
+     fixed-mockup gray must not survive dark mode). */
+  color: color-mix(in srgb, CanvasText 62%, transparent);
 }
 
 /* Tram markers (TV-0005, TV-0008) sit on the OpenStreetMap raster tiles, which
@@ -595,65 +769,10 @@ body {
   color: #1a1a1a;
 }
 
-/* Color legend for the tram types (TV-0009), shown in the status panel
-   while live. Swatches use the exact marker colors via the shared
-   variables; the hairline border keeps every hue visible on the panel's
-   Canvas in dark mode. */
-.legend {
-  margin: 0.5rem 0 0;
-  padding: 0.5rem 0 0;
-  border-top: 1px solid color-mix(in srgb, CanvasText 15%, transparent);
-  list-style: none;
-  font-size: 0.85rem;
-}
-
-.legend__item {
-  display: flex;
-  align-items: center;
-}
-
-.legend__item + .legend__item {
-  margin-top: 0.25rem;
-}
-
-.legend__swatch {
-  flex: none;
-  width: 12px;
-  height: 12px;
-  margin-right: 0.4rem;
-  border-radius: 3px;
-  border: 1px solid color-mix(in srgb, CanvasText 25%, transparent);
-}
-
-.legend__swatch--a {
-  background: var(--tram-type-a);
-}
-
-.legend__swatch--b {
-  background: var(--tram-type-b);
-}
-
-.legend__swatch--c {
-  background: var(--tram-type-c);
-}
-
-.legend__swatch--unknown {
-  background: var(--tram-type-unknown);
-}
-
-/* SpåraKoff legend entry (TV-0013): a square category-style swatch in car
-   #175's own body color; the entry itself is rendered by the panel only
-   while the car is in the current snapshot (never a zero-count row). */
-.legend__swatch--sparakoff {
-  background: var(--tram-type-sparakoff);
-}
-
-/* Out-of-service legend entry (TV-0011): a red dot, mirroring the marker's
-   not-in-service dot rather than the square category swatches. */
-.legend__swatch--offline {
-  background: var(--tram-type-offline);
-  border-radius: 50%;
-}
+/* Tram type colors in the strip (TV-0027, TV-0009): the legend became the
+   strip's inline chips - one chip per present category, colored by the
+   exact marker colors via the shared variables (the old .legend__swatch
+   rules are superseded by .debug-panel__chip--* above). */
 
 /* ---------------------------------------------------------------------------
    Vehicle overview page (TV-0017, Docs/ADR/0004-vehicle-overview-page.md).

@@ -83,9 +83,9 @@ trade-offs are recorded in
 
 ## Verifying the data flow
 
-Run `npm run dev` and open the app. In the top-right corner of the map, a
-small status panel (`src/components/TramStatusPanel.tsx`) reports the state
-of the data client:
+Run `npm run dev` and open the app. A compact status strip
+(`src/components/TramStatusPanel.tsx`) pinned to the bottom-left corner of
+the map, above the attribution band, reports the state of the data client:
 
 - an error box with the reason when the API key is missing or rejected, or
   the connection fails (since TV-0018 that includes the basemap: the same key
@@ -99,24 +99,46 @@ of the data client:
 - "Connecting to the tram position stream..." while the MQTT subscription
   comes up;
 - once live, a status line with the number of trams currently tracked and
-  the time of the last update, plus a color legend for the tram rolling
-  stock categories (`src/lib/fleet.ts`) shown on the map markers, each
-  category entry carrying its live count of trams currently in the
-  snapshot (TV-0012), the Unknown type entry only while an
+  the time of the last update (minute precision), plus the tram rolling
+  stock legend (`src/lib/fleet.ts`) as inline chips on a second row, one
+  chip per present category with a count of the trams of that type
+  currently in the snapshot (TV-0012), the Unknown type chip only while an
   unknown-numbered tram is in the snapshot (TV-0014 - never a zero-count
-  row), a SpåraKoff entry only while car #175 is in the snapshot
-  (TV-0013 - never a zero-count row), and a red-dot entry for
-  out-of-service trams (TV-0011).
+  row), a SpåraKoff chip only while car #175 is in the snapshot (TV-0013 -
+  never a zero-count row), and a red-dot chip for out-of-service trams
+  (TV-0011; TV-0027: the chip carries its live count - the out-of-service
+  trams are excluded from the category chips, so the status line's total
+  equals the sum of the category counts + the Not-in-service count + the
+  SpåraKoff count, 0 or 1). The chips show short labels (MLNRV, Artic, X54,
+  Unknown, SpåraKoff, Not in service); the full `fleet.ts` model name is
+  on each chip's `title` tooltip.
 
-TV-0015: the panel is collapsible with one click/tap. The chevron button in
-its header row collapses it to a small semi-transparent circle pinned to the
-same top-right spot; one click/tap (on the header chevron when expanded, on
-the circle when collapsed) restores it. While the client is live the circle
-shows the live tram count as a compact glanceable indicator. While collapsed
-the panel content is unmounted - removed from the accessibility tree - and
-the circle button itself is the keyboard- and screen-reader-operable control
-(`aria-expanded`, the state in its aria-label). Collapse state is
-per-session only: every page load starts expanded, nothing is persisted.
+TV-0027: the strip is z-index 640 - above the map pane's tier in the root
+stacking context (.leaflet-map-pane carries a transform, so it is its own
+stacking context and the panes' internal z-indexes - marker 600, tooltip
+650, popup 700 - order only inside it), so the strip covers map content in
+its own corner, an open popup included when one overlaps the strip's band;
+Leaflet's autoPan keeps a naturally-anchored popup clear of the strip. A
+popup guaranteed above the strip needs the popup rendered outside the map
+pane's subtree (a MapView/TramMarkers change - recorded as the TV-0027
+STOP-DECISION for a follow-up). The strip sits at
+`left: 1rem; bottom: 2.25rem`, clear of the attribution band; on narrow
+viewports the chips wrap inside their row and the strip clamps to the
+viewport, so it never overlaps the attribution and never causes horizontal
+scroll.
+
+TV-0015: the strip is collapsible with one click/tap. The collapse button
+pinned to the status row's right edge folds it to a small pill pinned to
+the same bottom-left spot; one click/tap (on the row's collapse button
+when expanded, on the pill when collapsed) restores it. While the client
+is live the pill shows the live tram count as a compact glanceable
+indicator; while loading, connecting, or errored it shows an expand
+chevron. While collapsed the strip content is unmounted - removed from
+the accessibility tree - and the pill itself is the keyboard- and
+screen-reader-operable control (`aria-expanded` on both affordances, the
+state in the aria-label, and the focus handed to the other affordance on
+every toggle). Collapse state is per-session only: every page load starts
+expanded, nothing is persisted.
 
 TV-0017: `index.html#/vehicle/<oper>/<veh>` is a second page: the
 per-vehicle overview. It is reached from the marker popup's link (and by
