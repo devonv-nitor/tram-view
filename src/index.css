@@ -62,13 +62,13 @@ body {
   height: 100%;
 }
 
-/* TV-0028: the punctuality heatmap's canvas fills its pane; the pane itself
-   is created and sized by PunctualityHeatmap.ts (z 250, pointer-events
-   none), so the canvas only needs to cover the pane exactly. */
+/* TV-0028: the punctuality heatmap's canvas fills its pane; the pane is
+   created and positioned by PunctualityHeatmap.ts (z 250, pointer-events
+   none). The canvas gets explicit px dimensions from the module (a created
+   pane has no layout size of its own), so this rule only neutralizes the
+   inline-canvas default (display: inline). */
 .punctuality-heatmap-canvas {
   display: block;
-  width: 100%;
-  height: 100%;
 }
 
 /* TV-0027: the status strip and its collapsed pill share one bottom-left

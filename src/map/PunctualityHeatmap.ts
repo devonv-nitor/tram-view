@@ -153,9 +153,11 @@ export class PunctualityHeatmapLayer {
       return;
     }
     this.mapSize = size;
-    // The bitmap is viewport-sized and DPR-scaled so gradients stay crisp
-    // on retina displays; the CSS size comes from
-    // .punctuality-heatmap-canvas (100% of the pane).
+    // The CSS size is explicit in px (a created Leaflet pane has no layout
+    // size of its own, so percentage sizing could resolve to zero); the
+    // bitmap is DPR-scaled so gradients stay crisp on retina displays.
+    this.canvas.style.width = `${size.x}px`;
+    this.canvas.style.height = `${size.y}px`;
     this.canvas.width = Math.round(size.x * dprSafe());
     this.canvas.height = Math.round(size.y * dprSafe());
   }
