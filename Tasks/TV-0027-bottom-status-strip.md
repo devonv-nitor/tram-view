@@ -1,6 +1,6 @@
 ---
 id: TV-0027
-status: IN_PROGRESS
+status: REVIEW
 owner: agent
 gatekeeper: human
 required_approvals: []
@@ -147,14 +147,58 @@ untouched).
   does not touch `src/index.css`. TV-0027 runs in parallel on top of
   `origin/main` at `e2db4d7`; the only plausible overlap is `PLAN.md`
   bookkeeping, which merges trivially. Merge order is unconstrained.
-- The z-index reasoning, so it need not be re-derived: with an explicit
-  z-index on the strip (`.app` is not a stacking context - it is
-  `position: relative` with no z-index), the strip's paint order against
-  Leaflet's panes is resolved in the root stacking context, so DOM order no
-  longer decides; the explicit values do. Leaflet's default z-indexes
-  (leaflet.css 1.9.x): tilePane 200, overlayPane 400, markerPane 600,
-  tooltipPane 650, popupPane 700, control containers 1000. Verify against
-  the pinned Leaflet version if in doubt.
+- Worker handoff 2026-10-08 (live verification, headless Chrome 155; all
+  evidence in `~/.../T/opencode/tv0027-evidence/`, `report.json` +
+  `popup-overlap-report.json` + screenshots): every acceptance item
+  verified except requirement 5's stated outcome. `npm run lint`,
+  `format:check`, `build` green; strip on load with live counts
+  (`Live · 105 trams · updated 10:48`, 4 chips with full fleet.ts titles,
+  24px button pinned right, z-index computed 640, anchor 16px/36px,
+  aria-live polite, real `<ul>` legend); minute precision verified;
+  390x844: no overlap (gap 19px), no horizontal scroll (390==390), chips
+  wrap to 2 lines; collapse/pill verified live and via keyboard
+  (Enter/Space, focus hand-off both ways, Tab reachable in 8 tabs; count
+  pill while live, chevron pill on the error variant - blocked-API run);
+  error variant red border rgb(179,38,30), message wrapped inside the
+  strip; legend values distinct over the window (10:48→10:49,
+  103→104 trams); clean-load network: exactly one `TramRoutes` POST (the
+  second POST is the pre-existing TV-0022 `LiveTramTrips`, fired by the
+  unchanged hook on main too), 12 keyed tiles, one app WebSocket
+  `wss://mqtt.hsl.fi/` (+ dev-only Vite HMR socket); no key in any log
+  (URLs redacted; the one round-1 report that captured keyed tile URLs was
+  scrubbed).
+- **STOP-DECISION 2026-10-08** (requirement 5's stated outcome not
+  achievable in this DOM within this task's allowed paths): measured,
+  the strip at z 640 covers an open popup when they overlap, because
+  Leaflet's `.leaflet-map-pane` always carries a `transform` (its zoom
+  machinery) and is therefore its own stacking context — the panes'
+  internal z-indexes (marker 600, tooltip 650, popup 700) order only
+  inside it. The strip competes with the map pane's root-level tier (400):
+  any strip z > 400 paints above the whole map subtree (popups included);
+  z ≤ 400 hides the strip under the basemap (measured z 300: popup wins
+  33:0 but the strip is under the map). Verified the same on origin/main
+  e2db4d7 (the old z-1000 panel covers a repositioned popup - the user's
+  original complaint, reproduced). The two properties of requirement 5
+  ("above marker pane 600" + "popup never covered") are jointly
+  unsatisfiable without rendering the popup outside the map pane's
+  subtree - a `MapView.tsx`/`TramMarkers.ts` change, forbidden here.
+  Implemented per the mockup: z 640 kept; the index.css comment, the
+  component docstring, and Docs/digitransit.md state the measured reality
+  (autoPan keeps naturally-anchored popups clear; only a popup overlapping
+  the strip's corner band is covered). Decision requested: accept z 640
+  with the documented limitation (recommended), or authorize a follow-up
+  task (needs MapView/TramMarkers) to render the popup outside the map
+  pane. Evidence: probes 12-20 + the main-tree baseline run in
+  `popup-overlap-report.json`.
+- The z-index reasoning as the task wrote it (so the reviewer can compare):
+  with an explicit z-index on the strip, the paint order against Leaflet's
+  panes was expected to resolve in the root stacking context because `.app`
+  is `position: relative` with no z-index - measured live, the map pane's
+  transform (set by Leaflet at creation) breaks that premise. Leaflet's
+  declared pane z-indexes (leaflet.css 1.9.4): tilePane 200, overlayPane
+  400, markerPane 600, tooltipPane 650, popupPane 700, controls 1000 -
+  verified in the pinned version; the container hierarchy, not the
+  declared values, decides across the boundary.
 - The strip's chips derive from the same `countByCategory` /
   SpåraKoff-reduction logic (unchanged); only the rendering moves from
   `<ul class="legend">` rows to inline chips. Class names are the panel's
