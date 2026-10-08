@@ -60,7 +60,9 @@ untouched).
    followed by the legend as inline chips - one chip per always-present
    category (A/B/C counts), the Unknown and SpåraKoff chips only while
    present (never a zero-count row, TV-0014/TV-0013 logic unchanged), and
-   the always-present red-dot chip (TV-0011).
+   the always-present red-dot chip with its live count (TV-0011; the
+   out-of-service trams are excluded from the category chips so nothing
+   double-counts - the status line's total equals the sum of the chips).
 3. **Chip labels.** Short display labels - MLNRV, Artic, X54, Unknown,
    SpåraKoff, Not in service - with the full `fleet.ts` label (or
    `Not in service (shunting/testing)`) on the chip's `title`.
@@ -208,8 +210,10 @@ untouched).
   400, markerPane 600, tooltipPane 650, popupPane 700, controls 1000 -
   verified in the pinned version; the container hierarchy, not the
   declared values, decides across the boundary.
-- The strip's chips derive from the same `countByCategory` /
-  SpåraKoff-reduction logic (unchanged); only the rendering moves from
+- The strip's chips derive from the same SpåraKoff-reduction logic
+  (TV-0027 review round amended: countByCategory also excludes the
+  out-of-service trams, which have their own counted chip - see the
+  requirement 2 text); only the rendering moves from
   `<ul class="legend">` rows to inline chips. Class names are the panel's
   own - renaming is allowed, but keep one shared anchor rule for the two
   states.

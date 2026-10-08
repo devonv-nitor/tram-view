@@ -386,8 +386,16 @@
   <div class="marker marker--offline" style="left: 55%; top: 72%;"></div>
   <div class="marker marker--sparakoff" style="left: 68%; top: 12%;">K</div>
 
-  <!-- TV-0023 HUD popup near the strip: the popup (z-index 700) draws over
-       the strip (640) - the stacking decision this mockup demonstrates. -->
+  <!-- TV-0023 HUD popup near the strip. NOTE: the popup-over-strip
+       layering here is a simplified sketch only - in the real app Leaflet's
+       .leaflet-map-pane is its own stacking context (it always carries a
+       transform), so the strip at root z-index 640 paints above the pane's
+       content, popups included, whenever they overlap the strip's corner
+       band; Leaflet's autoPan keeps naturally-anchored popups clear. The
+       measured stacking behavior and the accepted limitation are recorded
+       in Tasks/TV-0027-handoff-STOP-DECISION.md (resolution: option 4,
+       2026-10-08). The mockup's own DOM (popup z 700 vs strip 640 sharing
+       one stacking context) does not reproduce that reality. -->
   <div class="popup" id="popup">
     <div class="popup__content">
       <a class="popup__close" href="#" id="closeBtn">&#10005;</a>
@@ -475,7 +483,7 @@
     <button id="btnPopup">Toggle popup</button>
     <button id="btn390">390px check</button>
   </div>
-  <div class="demo-note">Static sketch - tokens mirror src/index.css; strip z-index 640, popup 700: the popup always wins.</div>
+  <div class="demo-note">Static sketch only - the real app's stacking differs: Leaflet's map pane is its own stacking context, so the strip at root z 640 paints above pane content incl. popups (see Tasks/TV-0027-handoff-STOP-DECISION.md).</div>
 
 <script>
   // Demo wiring - not part of the design. The real toggle logic is the

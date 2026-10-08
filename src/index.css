@@ -188,7 +188,10 @@ body {
 }
 
 .debug-panel__time {
-  color: #6b7078;
+  /* Muted scheme-aware tone (62% CanvasText over the Canvas surface): the
+     strip tracks the color scheme like the old panel (its text was plain
+     CanvasText), so the fixed-mockup gray must not survive dark mode. */
+  color: color-mix(in srgb, CanvasText 62%, transparent);
 }
 
 /* Error heading (TV-0027): "Tram data error" replaces the status line's
@@ -210,11 +213,11 @@ body {
   white-space: normal;
 }
 
-/* Loading and connecting text (TV-0027): same muted tone as the status
-   line's timestamp. */
+/* Loading and connecting text (TV-0027): same muted scheme-aware tone as
+   the status line's timestamp. */
 .debug-panel__progress {
   margin: 0;
-  color: #6b7078;
+  color: color-mix(in srgb, CanvasText 62%, transparent);
   white-space: nowrap;
 }
 
@@ -271,8 +274,11 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
+/* Chip label: the same muted scheme-aware tone as the timestamp - the
+   fixed-mockup gray must not survive dark mode. The swatches themselves
+   stay fixed (they carry the marker hues). */
 .debug-panel__chip-label {
-  color: #4a4d52;
+  color: color-mix(in srgb, CanvasText 62%, transparent);
 }
 
 /* Collapse button (TV-0015, pinned by TV-0027): absolutely pinned to the
@@ -358,7 +364,9 @@ body {
 }
 
 .debug-panel-toggle__chevron {
-  color: #6b7078;
+  /* Muted scheme-aware tone like the strip's other secondary text (the
+     fixed-mockup gray must not survive dark mode). */
+  color: color-mix(in srgb, CanvasText 62%, transparent);
 }
 
 /* Tram markers (TV-0005, TV-0008) sit on the OpenStreetMap raster tiles, which

@@ -106,8 +106,10 @@ the map, above the attribution band, reports the state of the data client:
   unknown-numbered tram is in the snapshot (TV-0014 - never a zero-count
   row), a SpåraKoff chip only while car #175 is in the snapshot (TV-0013 -
   never a zero-count row), and a red-dot chip for out-of-service trams
-  (TV-0011; it carries no count - a red-dot tram still tallies into its
-  own category chip). The chips show short labels (MLNRV, Artic, X54,
+  (TV-0011; TV-0027: the chip carries its live count - the out-of-service
+  trams are excluded from the category chips, so the status line's total
+  equals the sum of the category counts + the Not-in-service count + the
+  SpåraKoff count, 0 or 1). The chips show short labels (MLNRV, Artic, X54,
   Unknown, SpåraKoff, Not in service); the full `fleet.ts` model name is
   on each chip's `title` tooltip.
 

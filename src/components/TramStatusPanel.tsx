@@ -16,16 +16,37 @@ import {
  * Unknown vehicle numbers (including malformed ones) tally into UNKNOWN via
  * the fleet resolver. TV-0013: the SpåraKoff bar tram is excluded - it has
  * its own chip below and must not double-count into the A/MLNRV total it
- * would otherwise land in via the number ranges. */
+ * would otherwise land in via the number ranges. TV-0027 review round:
+ * out-of-service trams (routeShortName null - the same condition
+ * TramMarkers.ts renders the TV-0011 red dot from, minus the SpåraKoff
+ * exception which never shows the dot) are excluded here too: each has its
+ * own chip below, so leaving them in would double-count them across chips. */
 function countByCategory(
   positions: TramPosition[],
 ): Record<TramCategory, number> {
   const counts: Record<TramCategory, number> = { A: 0, B: 0, C: 0, UNKNOWN: 0 };
   for (const position of positions) {
     if (isSparakoffBarTram(position)) continue;
+    if (position.routeShortName === null) continue;
     counts[tramCategoryInfo(position.vehicleNumber).category] += 1;
   }
   return counts;
+}
+
+/** TV-0027 review round: the live count for the Not-in-service chip -
+ * positions whose route resolves to no displayed tram line, the exact
+ * condition TramMarkers.ts renders the red dot from (routeShortName null),
+ * minus the SpåraKoff exception (the bar tram never shows the dot; it has
+ * its own chip - TV-0013). The snapshot dedups per vehicle, so this and
+ * every chip count here is live and non-double-counting. */
+function countOffline(positions: TramPosition[]): number {
+  let count = 0;
+  for (const position of positions) {
+    if (position.routeShortName === null && !isSparakoffBarTram(position)) {
+      count += 1;
+    }
+  }
+  return count;
 }
 
 /** TV-0012: the fleet resolver's model name (the chip's `title` tooltip -
@@ -43,9 +64,10 @@ const CATEGORY_CHIP_LABELS: Record<
 };
 
 /** TV-0011: the out-of-service chip's short label and its full text (the
- * old legend row's wording). The chip has no count - a red-dot tram still
- * tallies into its own category chip above, so a second count would
- * double-count the vehicle. */
+ * old legend row's wording). TV-0027 review round: the chip carries its
+ * live count - the out-of-service trams are excluded from the category
+ * chips above (countByCategory), so this count is the only place a
+ * red-dot tram tallies; nothing double-counts. */
 const OFFLINE_CHIP_SHORT = "Not in service";
 const OFFLINE_CHIP_TITLE = "Not in service (shunting/testing)";
 
@@ -85,10 +107,13 @@ function PanelCollapseButton({
  * text; errors get the red-bordered variant with the full message wrapped
  * inside the strip. While live the chips show the color legend for the tram
  * rolling stock categories (TV-0009), each with its live count of trams
- * currently in the snapshot (TV-0012), the SpåraKoff chip only while car
- * #175 reports (TV-0013 - hidden entirely when absent, never a zero-count
- * row), and the red not-in-service dot chip for out-of-service trams
- * (TV-0011). Tram positions themselves render as map markers (TV-0005).
+ * currently in the snapshot (TV-0012; TV-0027 review round: out-of-service
+ * trams are excluded from the category counts and have their own counted
+ * chip, so the chips partition the snapshot with no double-count), the
+ * SpåraKoff chip only while car #175 reports (TV-0013 - hidden entirely when
+ * absent, never a zero-count row), and the counted red not-in-service dot
+ * chip for out-of-service trams (TV-0011). Tram positions themselves render
+ * as map markers (TV-0005).
  * TV-0027 stacking (measured in Chrome 155): the strip is z-index 640 -
  * above the map pane's tier in the root stacking context (.leaflet-map-pane
  * carries a transform, so it is its own stacking context and its internal
@@ -216,8 +241,12 @@ export function TramStatusPanel({ trams }: { trams: TramPositionsState }) {
   // One live count per category for this render (TV-0012); computed once,
   // not per chip. TV-0013: the SpåraKoff bar tram is counted separately -
   // the snapshot dedups per vehicle, so this is 0 or 1, and the chip below
-  // is rendered only while the car is present.
+  // is rendered only while the car is present. TV-0027 review round:
+  // out-of-service trams are excluded from the category counts and counted
+  // in the Not-in-service chip instead, so the chips partition the snapshot
+  // (see the sum note on the offline chip below).
   const counts = countByCategory(trams.positions);
+  const offlineCount = countOffline(trams.positions);
   const sparakoffCount = trams.positions.reduce(
     (n, position) => (isSparakoffBarTram(position) ? n + 1 : n),
     0,
@@ -297,15 +326,19 @@ export function TramStatusPanel({ trams }: { trams: TramPositionsState }) {
         )}
         {/* TV-0011: out-of-service trams keep their category color and
             replace the line number with a red dot - not a vehicle type, so
-            it sits after the category chips. The chip has no live count:
-            a red-dot tram is still counted in its category chip, so a
-            count here would double-count it (the mockup shows the chip
-            countless; the row of chips IS the live total across chips). */}
+            it sits after the category chips. TV-0027 review round: the
+            chip carries its live count - countByCategory excludes the
+            red-dot trams (routeShortName null, minus the SpåraKoff
+            exception which never shows the dot), so the chips partition
+            the snapshot: the status line's total equals the sum of the
+            category counts + this count + the SpåraKoff count (0 or 1).
+            The mockup's count 3 is that live number, not a constant. */}
         <li
           className="debug-panel__chip debug-panel__chip--offline"
           title={OFFLINE_CHIP_TITLE}
         >
           <span className="debug-panel__chip-swatch" aria-hidden="true" />
+          <span className="debug-panel__chip-count">{offlineCount}</span>
           <span className="debug-panel__chip-label">{OFFLINE_CHIP_SHORT}</span>
         </li>
       </ul>
