@@ -315,5 +315,25 @@ is open, once per route per session (cached per session alongside the
 stop-names load); there is **no second data stream** - no polling, no extra
 MQTT subscription, no new dependency (verified live 2026-09-28: the
 WebSocket connection count does not change across popup opens).
+
+TV-0028: the map page also renders a **punctuality heatmap** as its own
+canvas pane between the basemap and the markers (`src/map/PunctualityHeatmap.ts`,
+pane z 250; tiles < heatmap < markers, and TV-0019's route overlay tier sits
+between). It is a pure renderer over the same snapshot the markers read - no
+new request, no new stream, no new dependency. One soft blob per vehicle,
+colored by the vehicle's reported deviation `dl` (the same field the popup's
+Deviation cell shows): green `#34d399` ahead of timetable, red `#d32f2f`
+behind, transparent inside the ±20 s deadband, alpha ramping linearly to
+0.35 at ±900 s. Contributing vehicles: `dl` reported, not the SpåraKoff bar
+tram (no timetable to deviate from), and |dl| <= 900 s - the user's
+opetusajo filter (2026-10-08): a training/testing run's deviation is noise,
+and a vehicle beyond ±15 min is excluded entirely, not clamped into the
+scale. The layer is always on with no toggle and no legend entry (the
+ADR-0001 overlay precedent). The honesty limits are the popup's own: `dl`
+is recomputed only at stop events, so a blob shows the vehicle's
+*last-reported* deviation and can lag reality by up to a stop event; and
+only vehicles currently reporting color the map - an uncolored area means
+"no reporting tram here", never "on time".
+
 While the tab is hidden, the position stream and the one-second snapshot tick pause
 entirely and resume on focus, so a hidden tab pulls no feed traffic.
