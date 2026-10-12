@@ -75,16 +75,16 @@ body {
    anchor - one spot, two states - so the anchor is a single shared rule,
    as TV-0015 established for the old panel. TV-0019 req 9 (2026-10-12
    rework): the anchor moved onto the .strip-column wrapper that holds the
-   layer toggles ABOVE the strip/pill, so the toggles ride the strip's
-   height as it expands and collapses instead of sitting at a fixed offset
-   tuned to the collapsed pill only (which let the expanded strip overlap
-   them on phones where the chips wrap). The strip still sits after
+   layer toggles ABOVE the strip/pill; ONLY the column is absolutely
+   positioned - the strip and the pill are its static flow children (their
+   former position/bottom removed), so the buttons ride the strip's height
+   as it expands and collapses instead of the strip pinning itself over
+   them (the shared-absolute version left the strip absolutely positioned
+   within the column, covering the toggles). The strip still sits after
    <MapView /> in the JSX (App.tsx). The column sits above the map pane's
    subtree (its stacking context - see the z-index note below) and below
    the control containers. */
-.strip-column,
-.debug-panel,
-.debug-panel-toggle {
+.strip-column {
   position: absolute;
   left: 1rem;
   /* TV-0027 (measured in Chrome 141, 1280x800): the attribution band is
@@ -109,6 +109,13 @@ body {
      pane's subtree (a MapView/TramMarkers change) - STOP-DECISION
      2026-10-08, see Tasks/TV-0027-bottom-status-strip.md's handoff. */
   z-index: 640;
+  /* TV-0019 req 9 rework: the column stacks the toggles above the
+     strip/pill; the column's width is its widest child, and the children
+     align left. */
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.5rem;
 }
 
 /* TV-0019 req 9 (2026-10-12 rework): the anchored column that stacks the
@@ -418,9 +425,9 @@ body {
    The color scheme is tracked like the pill (Canvas/CanvasText), and the
    buttons are fixed against the viewport exactly like the strip - they do
    not pan or zoom with the map. */
+/* TV-0019 req 9 (2026-10-12 rework): the toggles are a static flow child
+   of .strip-column - the anchor and the stacking are the column's own. */
 .map-layer-toggles {
-  /* TV-0019 req 9 rework: a static child of .strip-column (the anchor is
-     the column's), so no position/left/bottom/z-index of its own. */
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
