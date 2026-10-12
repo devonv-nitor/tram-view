@@ -61,9 +61,10 @@ const BEHIND_COLOR = "#d32f2f";
 const AHEAD_COLOR = "#34d399";
 
 /** Peak blob alpha at |dl| = MAX_CONTRIBUTING_DL_S; the ramp is linear in
- * |dl| from 0 at the deadband to this at the clamp. Low enough to keep the
- * basemap readable underneath, high enough to read as a field. */
-const PEAK_ALPHA = 0.35;
+ * |dl| from 0 at the deadband to this at the clamp. Doubled from the
+ * original 0.35 at the user's 2026-10-12 review feedback: 1-2-minute
+ * deviations were barely perceptible. */
+const PEAK_ALPHA = 0.7;
 
 /** The heatmap's own pane name and z-index, slotted between the basemap and
  * everything else (tilePane 200 < this 250 < overlayPane 400 < markerPane
