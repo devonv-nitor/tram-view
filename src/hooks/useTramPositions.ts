@@ -31,6 +31,20 @@
  * patterns' vehiclePositions. The next-stop precedence is inverted for
  * metro (the topic level is the metro truth; tram keeps payload-first).
  *
+ * TV-0029, review round: the status and the error follow the **combined**
+ * connection of the two sockets: either connected -> live with error null;
+ * neither connected and a stream reported an error -> error with the last
+ * such error; otherwise connecting. So a tram socket that drops while the
+ * metro socket is up keeps the strip live (the snapshot IS live - the metro
+ * feed is flowing), and a stale error cannot outlive a connected feed.
+ * The partial-outage honesty: whichever feed's socket is down while the
+ * strip says live on the other, that feed's vehicles age toward the 5-minute
+ * staleness cutoff (POSITION_STALENESS_MS) and drop from the snapshot after
+ * it - a one-feed outage is visible as its vehicles disappearing, never as
+ * a strip error; one console.warn per metro outage (not per snapshot) keeps
+ * the reason in the console. With metro absent (metro connected never true,
+ * metro error never set) the decision is exactly the tram-only world's.
+ *
  * The stream and the snapshot tick both pause while the tab is hidden: the
  * MQTT subscriptions (tram and metro alike) are closed, so a hidden tab
  * generates no API traffic (the API-load balance from ADR-0002), and
@@ -130,6 +144,19 @@ export function useTramPositions(): TramPositionsState {
    * one. The snapshot's status decision reads both (live when either is
    * connected); stop() resets it like the tram's. */
   const metroLiveRef = useRef(false);
+  /** TV-0029, review round: the last stream error either feed reported.
+   * The strip's error state is derived from the combined connection
+   * (applyConnectionStatus): while either socket is connected the status is
+   * live and this error is never surfaced; when neither is connected and
+   * this is non-null, the strip shows it. Cleared when a socket connects -
+   * at that moment the failure the strip would show has a live feed beside
+   * it, so the honest state is live, not error. */
+  const lastStreamErrorRef = useRef<Error | null>(null);
+  /** TV-0029, review round: set once per metro outage while the tram socket
+   * keeps the strip live (a metro error with tram connected), so the
+   * console.warn about metro markers aging out fires once, not per
+   * snapshot; reset when the metro socket next reports connected. */
+  const metroOutageWarnedRef = useRef(false);
 
   // Tram line metadata comes from the keyed routing API; without a key the
   // app shows a clear error instead of silently hiding data.
@@ -196,6 +223,50 @@ export function useTramPositions(): TramPositionsState {
       });
     };
 
+    /** TV-0029, review round: the status and the error follow the
+     * **combined** connection of the two sockets, so they stay one decision
+     * and the strip never shows an error under a "live" status:
+     * - either socket connected -> "live", error null (and the recorded
+     *   error is dropped - the tram-only world's own rule: a snapshot that
+     *   observed connected nulled the stored error, so a later drop showed
+     *   "connecting", never a stale error);
+     * - neither connected, at least one stream reported an error -> "error"
+     *   with that error (the last one reported wins);
+     * - otherwise -> "connecting".
+     * The tram-only path is exactly the tram-only world's: with metro
+     * absent the metro ref never goes true and the tram error is the only
+     * recorded one, so the decision collapses to the original
+     * `connected ? "live" : prev.error !== null ? "error" : "connecting"`.
+     * Called from the stream error handlers (immediate, as the old world
+     * applied its error) and from the snapshot tick (the live/connecting
+     * transitions still ride the tick, as before). `errored` names the
+     * stream whose error is being applied: that socket's connection state
+     * is treated as down for this decision, because mqtt.ts reports an
+     * error before the close that follows it - the tram-only world applied
+     * its error unconditionally at that instant, and a "still connected"
+     * ref must not swallow it (the ref is stale for the moment the error
+     * fires; the close handler corrects it within the same task). */
+    const applyConnectionStatus = (errored: "tram" | "metro" | null) => {
+      const tramConnected = errored === "tram" ? false : connectedRef.current;
+      const metroConnected = errored === "metro" ? false : metroLiveRef.current;
+      if (tramConnected || metroConnected) {
+        lastStreamErrorRef.current = null;
+        setState((prev) =>
+          prev.status === "live" && prev.error === null
+            ? prev
+            : { ...prev, status: "live", error: null },
+        );
+        return;
+      }
+      setState((prev) => {
+        const error = lastStreamErrorRef.current;
+        const status: TramPositionsStatus =
+          error !== null ? "error" : "connecting";
+        if (prev.status === status && prev.error === error) return prev;
+        return { ...prev, status, error };
+      });
+    };
+
     const takeSnapshot = () => {
       ensureLiveTripsIfNeeded();
       setState((prev) => {
@@ -254,18 +325,29 @@ export function useTramPositions(): TramPositionsState {
           });
         }
         const connected = connectedRef.current;
-        // TV-0029: metro's socket can be live while the tram's is not (the
-        // snapshot is genuinely live whenever either feed is): live when
-        // either socket reports connected, else the tram stream's error /
-        // connecting state as today. A metro-only outage never shows as an
-        // app error (its handler logs it only).
+        const metroLive = metroLiveRef.current;
+        // The same error-clearing rule as applyConnectionStatus: a live
+        // observation drops the recorded error (the tram-only world's rule,
+        // applied to the combined record; kept outside the updater - refs
+        // are not updater state).
+        if (connected || metroLive) {
+          lastStreamErrorRef.current = null;
+        }
+        // TV-0029, review round: the status/error follow the combined
+        // connection (see applyConnectionStatus - same decision, evaluated
+        // on the tick so transitions ride it as they always have). Either
+        // socket connected is live with no error; neither is error with the
+        // last reported stream error, else connecting. A tram-only session
+        // (metro ref false, metro error never set) yields exactly the
+        // tram-only world's decision.
         const status: TramPositionsStatus =
-          connected || metroLiveRef.current
+          connected || metroLive
             ? "live"
-            : prev.error !== null
+            : lastStreamErrorRef.current !== null
               ? "error"
               : "connecting";
-        const error = connected ? null : prev.error;
+        const error =
+          connected || metroLive ? null : lastStreamErrorRef.current;
         // Return prev unchanged when nothing visible changed, so the tick
         // does not re-render consumers on no-op snapshots (~150 vehicles
         // updating ~1/s make this the difference between idle and churn).
@@ -298,6 +380,10 @@ export function useTramPositions(): TramPositionsState {
           },
           onConnectionChange: (connected) => {
             connectedRef.current = connected;
+            // No immediate status application here - the tram-only world
+            // recomputed live/connecting on the next snapshot tick, and the
+            // tick below still does (applyConnectionStatus runs only from
+            // onError, where the old world applied the error immediately).
           },
           onError: (error) => {
             if (closed) return;
@@ -305,17 +391,26 @@ export function useTramPositions(): TramPositionsState {
               "[tram-view] tram position stream error:",
               error.message,
             );
-            setState((prev) => ({ ...prev, status: "error", error }));
+            // TV-0029, review round: the recorded error follows the combined
+            // connection - either socket connected means live with no error
+            // (applyConnectionStatus), so a stale tram error cannot outlive
+            // a metro that is still up. `errored: "tram"` treats the tram
+            // ref as down for this immediate application (the error arrives
+            // before the close that follows it), matching the old world's
+            // unconditional error application.
+            lastStreamErrorRef.current = error;
+            applyConnectionStatus("tram");
           },
         });
         // TV-0029: the two streams' shared plumbing. Each handle owns its
         // `closed` flag (the tram comment above still applies per stream: a
         // flapping tab can close and replace one stream inside one effect
         // run, and a late error from an old socket must not be reported as
-        // the new one's failure). Metro's connection state feeds the status
-        // decision (live when either socket is connected); a metro-only
-        // error is logged and never degrades the tram status - metro is an
-        // additive feed whose failure must not break the existing view.
+        // the new one's failure). TV-0029, review round: either stream's
+        // error counts into the combined status (applyConnectionStatus) -
+        // the strip errors only when NEITHER socket is connected, and the
+        // down feed's markers age out after POSITION_STALENESS_MS (the
+        // metro handler below warns once per outage about exactly that).
         streamState.tram = {
           close: () => {
             closed = true;
@@ -333,8 +428,20 @@ export function useTramPositions(): TramPositionsState {
           onConnectionChange: (connected) => {
             // TV-0029: metro's connection state does not gate the tram
             // status - the two sockets connect independently, and the
-            // snapshot's status decision below reads both.
+            // snapshot's status decision below reads both. TV-0029, review
+            // round: the recorded error is cleared when the socket comes
+            // back (a connected feed stops the recorded error from mattering
+            // - see applyConnectionStatus).
             metroLiveRef.current = connected;
+            if (connected) {
+              lastStreamErrorRef.current = null;
+              // The outage warn flag belongs to one outage: a successful
+              // reconnect ends it, so a later outage warns once again.
+              metroOutageWarnedRef.current = false;
+            }
+            // No immediate application here either - both streams' connection
+            // changes ride the same next-tick recomputation; the 1 s tick is
+            // the shared timing contract for status flips.
           },
           onError: (error) => {
             if (closed) return;
@@ -342,6 +449,31 @@ export function useTramPositions(): TramPositionsState {
               "[tram-view] metro position stream error:",
               error.message,
             );
+            // TV-0029, review round: a metro error counts into the combined
+            // status exactly like a tram one - if neither socket is
+            // connected the strip shows the error; while the tram socket
+            // stays up the strip stays live (either-socket semantics).
+            // `errored: "metro"` treats the metro ref as down for this
+            // immediate application (the error arrives before the close
+            // that follows it).
+            lastStreamErrorRef.current = error;
+            applyConnectionStatus("metro");
+            // TV-0029, review round: partial-outage honesty - while the tram
+            // socket keeps the strip live, the metro feed's vehicles age
+            // toward the 5-min staleness cutoff and then drop from the
+            // snapshot (POSITION_STALENESS_MS; the tram feed's vehicles age
+            // out the same way when it is the down one). Warn once per
+            // outage, only when the strip really is staying live on the
+            // tram feed - when neither socket is connected the strip itself
+            // shows the error, so no warn is needed; the flag resets on the
+            // next successful metro connection.
+            if (connectedRef.current && !metroOutageWarnedRef.current) {
+              metroOutageWarnedRef.current = true;
+              console.warn(
+                "[tram-view] metro stream outage: the strip stays live on the tram feed, metro markers age out after",
+                `${POSITION_STALENESS_MS / 60_000} min without metro positions`,
+              );
+            }
           },
         });
         streamState.metro = {
@@ -371,6 +503,9 @@ export function useTramPositions(): TramPositionsState {
         streamState.metro.close();
         streamState.metro = null;
         metroLiveRef.current = false;
+        // The outage warn flag belongs to one stream's lifetime; a fresh
+        // metro stream warns once again if it fails again.
+        metroOutageWarnedRef.current = false;
       }
     };
 

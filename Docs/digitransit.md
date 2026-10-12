@@ -49,7 +49,13 @@ a service route and an out-of-service route shows whichever event arrived
 last, and vehicles that stop publishing still disappear after the staleness
 cutoff. TV-0029: metro vehicles resolve through the same three steps - the
 index (which now admits the SUBWAY routes), the live-trip match (the same
-query, asked for the indexed routes' `vehiclePositions`), else red.
+query, asked for the indexed routes' `vehiclePositions`), else red - plus
+one metro-only rule: a metro vehicle whose number is outside every mapped
+class range (101-184/201-224/301-325) renders the red dot too (out of the
+known fleet; a tram's unknown type instead keeps its gray body - TV-0009,
+unchanged). The rule lives in one shared predicate (`isVehicleOutOfService`,
+src/lib/fleet.ts) that the marker layer and the status panel's
+Not-in-service count both call.
 
 ## Metro trains on the map (TV-0029)
 
@@ -77,8 +83,10 @@ Routing API (2026-10-12), and what the app does with them:
   `M1`/`M2`. The metro routes resolve through the **same** per-session
   route index the trams use - the tram metadata query has no
   `transportModes` filter, so the SUBWAY routes were already in the
-  response; the index now admits `TRAM` and `SUBWAY` records whose short
-  name passes the line-name filter. One request per session, unchanged.
+  response; the index admits `TRAM` and `SUBWAY` records whose short name
+  passes that mode's line filter (`isTramLineShortName` for tram lines,
+  `isMetroLineShortName` - `M` + digits + optional trailing letter - for
+  metro). One request per session, unchanged.
 - **Next stop, inverted precedence.** The topic's level-13 next-stop id is
   present on 100% of metro vp topics, while the payload `stop` is null in
   ~56% of messages; when both are present they agreed in 670/701 samples
@@ -99,18 +107,20 @@ Routing API (2026-10-12), and what the app does with them:
   running 31M1). Not a metro line id; ignored like the tram side ignores
   the tram's `line`.
 - **Markers, chips, heatmap, overlay.** Metro markers are the tram
-  teardrop in HSL metro blue (`#0072bc`, one hue for all classes; the
-  class/model line `M100 (Rotary DC) · 2 cars` etc. is the hover tooltip),
-  labeled with the resolved M1/M2, red dot when unresolved. The status
-  strip gains one always-on `●N Metro` chip; the tram chips count tram
-  positions only, and Not-in-service counts both modes' unresolved
-  vehicles, so the chips partition the snapshot. The punctuality heatmap
-  contributes nothing for metro (no `dl` - the explicit mode guard
-  documents it). The tram line overlay draws the metro corridors in the
-  same pane with the metro blue under the same white casing; the geometry
-  rides the same one per-session request, widened to
-  `transportModes: [TRAM, SUBWAY]`, and the same `TO` toggle hides all
-  route lines.
+  teardrop in HSL's official metro orange (`#F15F22`, user decision
+  2026-10-12, superseding the task's original blue; one hue for all
+  classes - the class/model line `M100 (Rotary DC) · 2 cars` etc. is the
+  hover tooltip), labeled with the resolved M1/M2, red dot when unresolved
+  or of an unknown class. The status strip gains one always-on `●N Metro`
+  chip (resolved metro with a known class); the tram chips count tram
+  positions only, and Not-in-service counts every red-dot vehicle of both
+  modes (unresolved routes, plus metro of unknown class), so the chips
+  partition the snapshot. The punctuality heatmap contributes nothing for
+  metro (no `dl` - the explicit mode guard documents it). The tram line
+  overlay draws the metro corridors in the same pane with the metro orange
+  under the same white casing; the geometry rides the same one per-session
+  request, widened to `transportModes: [TRAM, SUBWAY]`, and the same `TO`
+  toggle hides all route lines.
 - **The vehicle overview stays tram-only.** A metro vehicle's popup link
   navigates to `#/vehicle/50/<veh>`, and the overview's vehicle-scoped
   subscription is tram-filtered (`+/tram/`), which returns nothing for a
@@ -183,10 +193,12 @@ the map, above the attribution band, reports the state of the data client:
   unknown-numbered tram is in the snapshot (TV-0014 - never a zero-count
   row), a SpåraKoff chip only while car #175 is in the snapshot (TV-0013 -
   never a zero-count row), a Metro chip for the metro trains in the
-  snapshot (TV-0029 - always on, any class, one blue in the legend), and a
-  red-dot chip for out-of-service trams
+  snapshot (TV-0029 - always on, resolved metro with a known class, one
+  orange in the legend), and a red-dot chip for out-of-service vehicles of
+  both modes
   (TV-0011; TV-0027: the chip carries its live count - the out-of-service
-  trams are excluded from the category chips, so the status line's total
+  vehicles are excluded from the category chips and the Metro chip, so the
+  status line's total
   equals the sum of the category counts + the Not-in-service count + the
   SpåraKoff count + the Metro count). The chips show short labels (MLNRV,
   Artic, X54, Metro, Unknown, SpåraKoff, Not in service); the full

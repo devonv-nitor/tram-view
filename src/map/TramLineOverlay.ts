@@ -97,7 +97,7 @@ export class TramLineOverlay {
    * Leaflet's setStyle merges into `layer.options` on first style change, so
    * no shared object is ever mutated across polylines.
    * TV-0029: the metro routes (SUBWAY, the query's widened scope) draw in
-   * the same pane with the metro line blue under the same white casing -
+   * the same pane with the metro line orange under the same white casing -
    * the casing list is shared, so a metro casing sits under every colored
    * line exactly as a tram casing does; the colored lists are per mode so
    * zoom-end re-styles each at its own width (the same width table, so the

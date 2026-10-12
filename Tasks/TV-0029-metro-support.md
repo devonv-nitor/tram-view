@@ -110,6 +110,12 @@ unit; car count is a **static property of the class**, not feed data
    `vehiclePositions`), else red dot. The `31M1B`/`31M2B` patterns are
    in the index (their gtfsIds resolve) and draw nothing special: a
    vehicle reporting `31M1B` renders as M1 with the short-turn's headsign.
+   **Amended (TV-0029 review round 2026-10-12, blocking finding 1):** the
+   index's line-name filter is per mode - a TRAM route needs a tram short
+   name, a SUBWAY route needs a metro one (M + digits + optional letter,
+   isMetroLineShortName in digitransit.ts); the tram filter alone admits
+   no metro short name, which is what kept the metro routes out of the
+   index in the first cut.
 3. **Markers.** Metro markers are the existing teardrop, labeled with the
    line (`M1`/`M2` from the resolved shortName) and colored by class:
    **M100 = a distinct blue** (`#0072bc`, HSL metro line blue), **M200 =
@@ -121,6 +127,10 @@ unit; car count is a **static property of the class**, not feed data
    collides-proof (metro oper 50 never overlaps tram opers).
    Out-of-service metro (no resolved route) renders the red dot like
    trams.
+   **Superseded 2026-10-12 (user decision, routed by the coordinator):**
+   the metro color is HSL's official metro orange, `#F15F22` - one hue for
+   all three classes (the class distinction stays the tooltip, not the
+   color); the blue above is the superseded original.
 4. **Popup.** The HUD popup gains no new cells beyond what the data
    carries: speed, next stop (topic level, inverted precedence for
    metro), headsign, line badge (M1/M2). ETA cell: **dash for metro** in
@@ -137,6 +147,16 @@ unit; car count is a **static property of the class**, not feed data
    are not color-coded; a count chip per class is noise). The sum check
    extends: tram chips + metro chip + offline (both modes) partition the
    snapshot.
+   **Amended (TV-0029 review round 2026-10-12, blocking finding 2):** the
+   Metro chip counts resolved metro with a known class only; the
+   Not-in-service chip counts every red-dot vehicle of both modes -
+   unresolved routes, plus metro of unknown class (requirement 8's rule
+   also feeds the chip, so the chip counts what the map shows). The exact
+   partition: tram category chips (resolved trams by class) + Metro chip
+   (resolved metro, known class) + Not-in-service (all unresolved vehicles
+   of both modes, plus unknown-class metro, minus SpåraKoff) + SpåraKoff
+   (its own identity) = the snapshot total; every vehicle tallies exactly
+   once.
 6. **Heatmap.** Metro contributes **nothing** to the punctuality heatmap:
    `dl` is always null so the existing contributing rule (requires
    non-null `dl`) already excludes metro - no change, but the exclusion
@@ -152,6 +172,10 @@ unit; car count is a **static property of the class**, not feed data
    blue/gray on the map's own style - pick a color that reads on the
    hsl-map basemap and record it; casing under the metro lines mirrors
    the tram casing).
+   **Superseded 2026-10-12 (user decision, routed by the coordinator):**
+   the color is the same metro orange `#F15F22` as the markers (recorded
+   in constants.ts's `METRO_LINE_COLOR`), superseding the "pick a color"
+   wording above.
 8. **Icons/colors constants.** The metro class lookup mirrors
    `fleet.ts`: ranges 101-184 -> M100, 201-224 -> M200, 301-325 -> M300,
    else unknown (red dot, honest "Unknown type" tooltip). All constants
@@ -177,13 +201,19 @@ unit; car count is a **static property of the class**, not feed data
 1. `npm run lint`, `npm run format:check`, `npm run build` green; `dist/`
    deleted; no `package.json` change.
 2. **Manual review on the dev server (the human gate):** metro trains
-   visible on the map as blue teardrops with M1/M2 labels, moving along
+   visible on the map as orange (#F15F22, the amended color - the
+   original text said blue) teardrops with M1/M2 labels, moving along
    the metro corridors; the popup opens with line badge, vehicle key
    (50/veh), GTFS key (HSL:31M1/M2), headsign, speed, next stop;
    deviation cell absent; ETA dash; the strip's Metro chip counts match
-   the visible metro markers; the heatmap is unchanged by metro; toggling
-   the lines overlay off removes the metro lines too; toggling the
-   heatmap off does not affect metro markers.
+   the visible resolved-and-known-class metro markers; the heatmap is
+   unchanged by metro; toggling the lines overlay off removes the metro
+   lines too; toggling the heatmap off does not affect metro markers.
+   **Amended (TV-0029 review round 2026-10-12, blocking findings 1-3):**
+   metro routes enter the index (the metro short-name filter), the Metro
+   chip counts only resolved metro with a known class, and an
+   unknown-class metro vehicle renders the red dot - the Not-in-service
+   chip counts every red dot on the map.
 3. The reviewer may assume checks green (the flow) and judges the diff
    against requirements 1-10 code-only.
 4. Request discipline: exactly one new WebSocket (the metro
@@ -208,10 +238,11 @@ unit; car count is a **static property of the class**, not feed data
   only the Routing API's static timetable. If the user wants metro door
   state or capacity, the feed does not expose it today; say so rather
   than inventing.
-- Marker color: the task names one metro blue for all three classes
-  (the classes are distinguishable by tooltip/vehicle number, and three
-  shades would be indistinguishable at marker scale); if the user wants
-  per-class color at review, it is a one-constant change per class.
+- Marker color: **Superseded 2026-10-12 (user decision)** - the color is
+  HSL's official metro orange `#F15F22` for all three classes (see the
+  requirement 3 amendment); the class distinction stays the
+  tooltip/vehicle number, and per-class color remains a one-constant
+  change per class at review.
 - The popup's vehicle-key row shows `50/<veh>` for metro (same format);
   the GTFS key shows `HSL:31M1`/`HSL:31M2` as resolved.
 - Merge order: none required (this task and TV-0024 touch different
@@ -230,8 +261,10 @@ unit; car count is a **static property of the class**, not feed data
      routes (HSL:31M1/M2/M1B/M2B, shortNames M1/M2/M1B/M2B, verified against
      the live API before coding) now enter the index through
      `buildTramRouteIndex`'s admission filter (`TRAM` or `SUBWAY` + the
-     line-name filter), keeping the request profile at exactly one
-     metadata request per session.
+     per-mode line-name filter; the metro side is `isMetroLineShortName`,
+     added in the review round - the original text wrongly credited the
+     tram filter, which admits no metro short name), keeping the request
+     profile at exactly one metadata request per session.
   2. `resolveLiveTramTrip` is **not mode-scoped**: its query asks for the
      indexed routes' `patterns.vehiclePositions` only, so widening the index
      to the metro routes extends the live-trip match to metro with no query
@@ -239,14 +272,21 @@ unit; car count is a **static property of the class**, not feed data
      dot last, through the same mechanism.
   3. The overlay geometry query was widened in place
      (`transportModes: [TRAM, SUBWAY]`) - still one request per session; the
-     overlay draws metro patterns with `METRO_LINE_COLOR` (#0072bc) under the
+     overlay draws metro patterns with `METRO_LINE_COLOR` (#F15F22, the
+     amended orange - this handoff's earlier text said #0072bc) under the
      shared white casing, keyed off `TramRouteGeometry.mode`.
   4. The metro next-stop precedence inversion lives in the snapshot builder
      (per-mode branch on `latest.mode`); the shared subscription helper in
      hfp.ts tags each parsed position with its subscription's mode, so the
      tram path's behavior is unchanged (payload-first).
   5. Status logic: live when either socket is connected; a metro-only error
-     is logged, never shown as an app error.
+     is logged, never shown as an app error. **Amended (TV-0029 review
+     round 2026-10-12, blocking finding 4):** the error state follows the
+     combined connection - either socket connected -> live, error null;
+     neither connected and a stream error recorded -> error with it;
+     otherwise connecting. A partial outage (one feed down) keeps the
+     strip live; the down feed's markers age out after
+     POSITION_STALENESS_MS, and the metro handler warns once per outage.
   6. The Deviation cell is omitted (not a dash) for metro popups; the Doors
      cell spans the row. ETA renders the muted dash via the existing
      scheduleDeviation-null path.

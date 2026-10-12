@@ -55,6 +55,7 @@ import {
 } from "../lib/journey.ts";
 import {
   isSparakoffBarTram,
+  isVehicleOutOfService,
   SPARAKOFF_MARKER_LETTER,
   tramCategoryInfo,
 } from "../lib/fleet.ts";
@@ -84,9 +85,10 @@ function normalizeHeading(heading: number | null): number | null {
 /** Body-color class slug for one vehicle: the SpåraKoff special case
  * (TV-0013) wins over the TV-0009 category for car #175 only; every other
  * number keeps its plain CATEGORY_RANGES lookup. TV-0029: a metro vehicle
- * (operator 50) uses its own modifier class - the metro body is one blue
+ * (operator 50) uses its own modifier class - the metro body is one orange
  * for every class (requirement 3), so no per-class metro color class
- * exists; the tram category classes are untouched. */
+ * exists; the tram category classes are untouched and a metro position can
+ * never fall into them (the mode check is first and tram-only below it). */
 function markerSlug(position: TramPosition): string {
   if (position.mode === "metro") return "metro";
   return isSparakoffBarTram(position)
@@ -116,8 +118,9 @@ function markerLabel(position: TramPosition): string {
  * leaving the plain TV-0005 circle. Labels are tram line short names
  * already validated by isTramLineShortName (digits 1-15 with an optional
  * trailing letter, or a single letter), so they are safe as icon HTML.
- * TV-0029: a metro label is the index-resolved M1/M2, from the same
- * validation (a leading "M" then digits with an optional trailing letter).
+ * TV-0029: a metro label is the index-resolved M1/M2, validated by its own
+ * predicate (isMetroLineShortName: a leading "M" then digits with an
+ * optional trailing letter) - equally safe as icon HTML.
  * An out-of-service vehicle (routeShortName null, TV-0011) keeps the
  * category-colored body and heading rotation and swaps the line label for
  * the red not-in-service dot (CSS: .tram-marker--offline); the label span
@@ -132,8 +135,12 @@ function createTramIcon(position: TramPosition): L.DivIcon {
   const headingless = position.heading === null;
   // TV-0013: the SpåraKoff bar tram always shows its own letter and color -
   // never the TV-0011 red dot, even when its route resolves to no line.
-  const barTram = isSparakoffBarTram(position);
-  const offline = position.routeShortName === null && !barTram;
+  // TV-0029: the one out-of-service rule (isVehicleOutOfService) decides the
+  // dot for both modes: an unresolved route (tram TV-0011; metro the same)
+  // and - metro only - an unknown-class vehicle outside every mapped range
+  // (requirement 8; tram unknown types keep their gray UNKNOWN body without
+  // the dot, TV-0009, unchanged).
+  const offline = isVehicleOutOfService(position);
   const className = `tram-marker tram-marker--${markerSlug(position)}${headingless ? " tram-marker--headingless" : ""}${offline ? " tram-marker--offline" : ""}`;
   const rotation = headingless
     ? ""
@@ -156,11 +163,14 @@ function createTramIcon(position: TramPosition): L.DivIcon {
  * TV-0029: a metro vehicle's tooltip is the class/model line - the tram
  * tooltips are unchanged. */
 function tooltipText(position: TramPosition): string {
+  // TV-0029: a metro vehicle's tooltip is the class/model line - the tram
+  // tooltips are unchanged. The "Not in service" prefix follows the same
+  // rule the red dot renders from (isVehicleOutOfService): an unresolved
+  // route, or - metro only - an unknown class (requirement 8).
   if (position.mode === "metro") {
-    const line =
-      position.routeShortName === null
-        ? "Not in service"
-        : `Line ${position.routeShortName}`;
+    const line = isVehicleOutOfService(position)
+      ? "Not in service"
+      : `Line ${position.routeShortName}`;
     return `${line} — ${metroClassTooltip(position.vehicleNumber)}`;
   }
   if (isSparakoffBarTram(position)) {
@@ -479,9 +489,10 @@ export class TramMarkerLayer {
     // one class toggle: the label span and the red dot swap visibility in
     // CSS, so no element is created or removed on a flicker. TV-0013: the
     // SpåraKoff bar tram never flips - it shows its letter, not the dot,
-    // even when the route resolves to no line.
-    const offline =
-      position.routeShortName === null && !isSparakoffBarTram(position);
+    // even when the route resolves to no line. TV-0029: the metro rule rides
+    // the same one predicate (an unresolved metro route, and a metro vehicle
+    // of unknown class, both show the dot; tram behavior unchanged).
+    const offline = isVehicleOutOfService(position);
     if (element.classList.contains("tram-marker--offline") !== offline) {
       element.classList.toggle("tram-marker--offline", offline);
     }

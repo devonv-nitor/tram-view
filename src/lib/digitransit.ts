@@ -206,16 +206,21 @@ async function buildTramRouteIndex(
   for (const route of data.routes) {
     // TV-0029: the metro routes ride the same per-session metadata response
     // (the query carries no transportModes filter, so all modes already come
-    // back) - one request stays one request. Their short names (M1, M2 and
-    // the M1B/M2B short-turns) pass the same line-name filter, so the index
-    // admits them and the resolution order below applies unchanged.
+    // back) - one request stays one request. The admission predicate is per
+    // mode: a TRAM record needs a tram line short name, a SUBWAY record a
+    // metro one (M1, M2 and the M1B/M2B short-turns - isMetroLineShortName
+    // below). The tram filter admits none of those, which is what kept the
+    // metro routes out of the index in the first cut: they then resolved
+    // only through the live-trip match, which is asked for the indexed
+    // routes' patterns, so nothing matched and metro fell through to the
+    // red dot (review round 2026-10-12).
     if (
       (route.mode !== "TRAM" && route.mode !== "SUBWAY") ||
       route.shortName === null
     ) {
       continue;
     }
-    if (!isTramLineShortName(route.shortName)) continue;
+    if (!isAdmittedLineShortName(route.mode, route.shortName)) continue;
     index.set(route.gtfsId, route.shortName);
   }
   tramLineIndexForDebug = index;
@@ -228,6 +233,24 @@ const TRAM_LINE_SHORT_NAME = /^(?:(?:[1-9]|1[0-5])[A-Z]?|[A-Z])$/;
 
 export function isTramLineShortName(shortName: string): boolean {
   return TRAM_LINE_SHORT_NAME.test(shortName.trim().toUpperCase());
+}
+
+/** TV-0029: metro lines Tram View displays: `M` + digits (M1, M2) with an
+ * optional trailing letter (the M1B/M2B short-turns). Case-insensitive. The
+ * real short names measured live on 2026-10-12: M1, M2, M1B, M2B. */
+const METRO_LINE_SHORT_NAME = /^M[0-9]+[A-Z]?$/;
+
+export function isMetroLineShortName(shortName: string): boolean {
+  return METRO_LINE_SHORT_NAME.test(shortName.trim().toUpperCase());
+}
+
+/** The index's per-mode line-name filter (TV-0029): a TRAM route must pass
+ * isTramLineShortName, a SUBWAY route isMetroLineShortName. Any other mode
+ * is unadmitted. */
+function isAdmittedLineShortName(mode: string, shortName: string): boolean {
+  return mode === "SUBWAY"
+    ? isMetroLineShortName(shortName)
+    : isTramLineShortName(shortName);
 }
 
 /** Maps an HFP route id (no feed prefix) to the line short name, or null
@@ -248,8 +271,8 @@ export function resolveTramShortName(
  * - `absent-from-gtfs`: no such gtfsId in the raw GTFS route list at all.
  * - `not-tram-mode`: the route exists but is another GTFS mode (e.g. BUS).
  * - `short-name-missing`: a TRAM route whose GTFS shortName is null.
- * - `short-name-fails-line-criteria`: a TRAM route whose shortName does not
- *   pass isTramLineShortName (the index's pre-filter). */
+ * - `short-name-fails-line-criteria`: a TRAM or SUBWAY route whose shortName
+ *   does not pass its mode's line filter (the index's pre-filter). */
 export type TramRouteResolutionReason =
   | "in-tram-line-index"
   | "absent-from-gtfs"
@@ -268,14 +291,15 @@ export interface TramRouteResolution {
   inTramLineIndex: boolean;
   reason: TramRouteResolutionReason;
   /** Route mode from the raw GTFS list; null when the route is absent from
-   * it. For an indexed route this is the raw record's real mode (TRAM by
-   * construction of the index). */
+   * it. For an indexed route this is the raw record's real mode (TRAM or
+   * SUBWAY by construction of the index). */
   mode: string | null;
   /** The GTFS shortName: the indexed value when the route is in the index,
    * else the raw GTFS shortName when the route exists there. */
   shortName: string | null;
-  /** Whether the shortName passes isTramLineShortName, recomputed here;
-   * null when there is no shortName to test. */
+  /** Whether the shortName passes the route mode's line filter (TV-0029:
+   * tram or metro per the raw record's mode), recomputed here; null when
+   * there is no shortName to test. */
   passesLineCriteria: boolean | null;
 }
 
@@ -294,13 +318,19 @@ export function resolveTramRouteDebug(
   const rawRoute = raw.get(gtfsId) ?? null;
   const indexedShortName = index.get(gtfsId);
   if (indexedShortName !== undefined) {
+    // The raw record is normally present; when it is not, the mode is
+    // inferred from the short name (a metro short name is M-prefixed) so the
+    // recomputed criteria stay per mode (TV-0029).
+    const mode =
+      rawRoute?.mode ??
+      (isMetroLineShortName(indexedShortName) ? "SUBWAY" : "TRAM");
     return {
       gtfsId,
       inTramLineIndex: true,
       reason: "in-tram-line-index",
-      mode: rawRoute?.mode ?? "TRAM",
+      mode,
       shortName: indexedShortName,
-      passesLineCriteria: isTramLineShortName(indexedShortName),
+      passesLineCriteria: isAdmittedLineShortName(mode, indexedShortName),
     };
   }
   if (rawRoute === null) {
@@ -323,7 +353,7 @@ export function resolveTramRouteDebug(
       passesLineCriteria:
         rawRoute.shortName === null
           ? null
-          : isTramLineShortName(rawRoute.shortName),
+          : isAdmittedLineShortName(rawRoute.mode, rawRoute.shortName),
     };
   }
   if (rawRoute.shortName === null) {
@@ -342,7 +372,10 @@ export function resolveTramRouteDebug(
     reason: "short-name-fails-line-criteria",
     mode: rawRoute.mode,
     shortName: rawRoute.shortName,
-    passesLineCriteria: isTramLineShortName(rawRoute.shortName),
+    passesLineCriteria: isAdmittedLineShortName(
+      rawRoute.mode,
+      rawRoute.shortName,
+    ),
   };
 }
 
@@ -815,7 +848,7 @@ export interface TramRouteGeometry {
   shortName: string | null;
   patterns: TramPatternGeometry[];
   /** TV-0029: the route's GTFS mode ("TRAM" or "SUBWAY"), the only signal
-   * the overlay needs to color a metro route with the metro line blue
+   * the overlay needs to color a metro route with the metro line orange
    * instead of the tram green. */
   mode: string;
 }

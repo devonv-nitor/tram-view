@@ -1,7 +1,8 @@
 /**
  * HSL rolling stock categories (TV-0009): which tram type a vehicle number
  * belongs to, and its advertised model name. Tram-only by design - the metro
- * classes live in the sibling src/lib/metro.ts (TV-0029).
+ * classes live in the sibling src/lib/metro.ts (TV-0029); the one cross-mode
+ * rule below (the TV-0029 out-of-service predicate) consults both modules.
  *
  * Category source, live-verified (decision in Docs/ADR/0002-data-transport.md,
  * evidence in the TV-0009 commit record): neither the HFP VP payload (no
@@ -12,6 +13,8 @@
  * a rendering-only choice (Docs/ADR/0001-map-library.md), not a change to the
  * transport or load picture.
  */
+
+import { metroVehicleClass } from "./metro.ts";
 
 /** Rolling stock categories: A = MLNRV I/II (one category), B = Škoda
  * Artic, C = Artic X54. B and C have similar advertised names but must be
@@ -119,5 +122,36 @@ export function isSparakoffBarTram(vehicle: TramVehicleIdentity): boolean {
   return (
     vehicle.operatorId === SPARAKOFF_OPERATOR_ID &&
     vehicle.vehicleNumber === SPARAKOFF_VEHICLE_NUMBER
+  );
+}
+
+/** Minimal vehicle identity the out-of-service rule consults: any position
+ * shape carries these four fields (HFP messages, TramPosition). */
+interface OutOfServiceCandidate {
+  mode: "tram" | "metro";
+  routeShortName: string | null;
+  operatorId: number;
+  vehicleNumber: number;
+}
+
+/** TV-0029: the one out-of-service rule every consumer renders the red dot
+ * from - the marker layer (TramMarkers.ts) and the status panel's
+ * Not-in-service count (TramStatusPanel.tsx) both call this, so the strip's
+ * count can never drift from the map's dots:
+ * - the SpåraKoff bar tram (TV-0013) never shows the dot - it has its own
+ *   identity and chip - and the rule wins over everything else below;
+ * - a vehicle whose route resolves to no displayed line (tram: TV-0011;
+ *   metro: an unresolved metro route) shows the dot;
+ * - a metro vehicle outside every mapped class range (metroVehicleClass
+ *   null, requirement 8) also shows the dot: it is out of the known fleet,
+ *   the same honest reading the tram side gives an unknown type - except
+ *   the tram side's unknown renders the gray UNKNOWN body WITHOUT the dot
+ *   (TV-0009, unchanged), while a metro unknown is the dot. */
+export function isVehicleOutOfService(vehicle: OutOfServiceCandidate): boolean {
+  if (isSparakoffBarTram(vehicle)) return false;
+  if (vehicle.routeShortName === null) return true;
+  return (
+    vehicle.mode === "metro" &&
+    metroVehicleClass(vehicle.vehicleNumber) === null
   );
 }

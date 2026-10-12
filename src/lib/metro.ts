@@ -17,8 +17,11 @@
  * choice (Docs/ADR/0001-map-library.md), not a change to the transport or
  * load picture. The live window measured 18 M100, 4 M200, 13 M300 and zero
  * outside the ranges; a number outside them resolves to null and the marker
- * renders as the tram-side UNKNOWN does (red dot logic untouched, honest
- * "Unknown type" tooltip).
+ * renders the red not-in-service dot (the TV-0029 review round's
+ * requirement-8 rule, shared with the marker layer and the strip through
+ * isVehicleOutOfService) with the honest "Unknown metro type" tooltip. The
+ * tram side is deliberately different: an unknown tram number renders the
+ * gray UNKNOWN body without the dot (TV-0009, unchanged).
  */
 
 /** The HFP operator id of HSL metro (every metro vp payload reports it). */
@@ -53,8 +56,9 @@ const METRO_CLASS_RANGES: { min: number; max: number; klass: MetroClass }[] = [
 ];
 
 /** Resolves a metro vehicle number to its class info, or null when the
- * number is not in any mapped range (rendered as unknown, never silently
- * relabeled) - and so are malformed values (non-integer, negative). */
+ * number is not in any mapped range (rendered as the red not-in-service
+ * dot, never silently relabeled - see isVehicleOutOfService) - and so are
+ * malformed values (non-integer, negative). */
 export function metroVehicleClass(
   vehicleNumber: number,
 ): MetroClassInfo | null {
