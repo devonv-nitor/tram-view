@@ -375,11 +375,11 @@ body {
 .debug-panel-toggle {
   display: flex;
   align-items: center;
-  justify-content: center;
   gap: 0.35rem;
   width: 70px;
   height: 36px;
   padding: 0;
+  padding-left: 1rem;
   border: 1px solid color-mix(in srgb, CanvasText 40%, transparent);
   border-radius: 999px;
   background: color-mix(in srgb, Canvas 92%, transparent);
@@ -436,7 +436,6 @@ body {
 .map-layer-toggle {
   display: flex;
   align-items: center;
-  justify-content: center;
   gap: 0.3rem;
   /* TV-0019 (2026-10-12 user feedback): the same 70px x 36px oval as the
      collapsed status pill, so the corner reads as one column of matching
@@ -444,6 +443,7 @@ body {
   width: 70px;
   height: 36px;
   padding: 0;
+  padding-left: 1rem;
   border: 1px solid color-mix(in srgb, CanvasText 40%, transparent);
   border-radius: 999px;
   background: color-mix(in srgb, Canvas 92%, transparent);
