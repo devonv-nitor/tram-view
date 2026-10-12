@@ -31,13 +31,22 @@ function MapPage() {
         heatmapOn={heatmapOn}
         overlayOn={overlayOn}
       />
-      <MapLayerToggles
-        heatmapOn={heatmapOn}
-        overlayOn={overlayOn}
-        onToggleHeatmap={() => setHeatmapOn((on) => !on)}
-        onToggleOverlay={() => setOverlayOn((on) => !on)}
+      <TramStatusPanel
+        trams={trams}
+        // TV-0019 req 9: the toggles render inside the strip's anchored
+        // column (TramStatusPanel owns the anchor), so they sit above the
+        // pill/strip and move with it as it expands and collapses. The
+        // state itself stays here (MapPage) and reaches the layers through
+        // MapView's props.
+        toggles={
+          <MapLayerToggles
+            heatmapOn={heatmapOn}
+            overlayOn={overlayOn}
+            onToggleHeatmap={() => setHeatmapOn((on) => !on)}
+            onToggleOverlay={() => setOverlayOn((on) => !on)}
+          />
+        }
       />
-      <TramStatusPanel trams={trams} />
     </main>
   );
 }

@@ -1,4 +1,10 @@
-import { useEffect, useRef, useState, type RefObject } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type ReactNode,
+  type RefObject,
+} from "react";
 import type { TramPosition } from "../lib/digitransit.ts";
 import type { TramPositionsState } from "../hooks/useTramPositions";
 import {
@@ -128,7 +134,18 @@ function PanelCollapseButton({
  * click/tap on the pill restores it; the state is per-session component
  * state, expanded on every load, never persisted. The strip's chips are a
  * real <ul> (role list) so the legend's aria-label is announced. */
-export function TramStatusPanel({ trams }: { trams: TramPositionsState }) {
+export function TramStatusPanel({
+  trams,
+  toggles,
+}: {
+  trams: TramPositionsState;
+  /** TV-0019 req 9: the layer toggles, rendered inside this panel's
+   * anchored column above the pill/strip - MapPage owns their state and
+   * passes the already-built element; this component owns only the
+   * anchor, so the buttons ride the strip's height as it expands and
+   * collapses. */
+  toggles?: ReactNode;
+}) {
   // TV-0015: per-session collapse state - the strip is expanded on every
   // load and never persisted (no localStorage).
   const [collapsed, setCollapsed] = useState(false);
@@ -171,70 +188,84 @@ export function TramStatusPanel({ trams }: { trams: TramPositionsState }) {
           ? "Show the tram data error strip"
           : "Show the tram status strip";
     return (
-      <button
-        ref={expandRef}
-        type="button"
-        className="debug-panel-toggle"
-        aria-expanded={false}
-        aria-label={label}
-        onClick={() => setCollapsed(false)}
-      >
-        {liveCount !== null ? (
-          <>
-            <span className="debug-panel-toggle__dot" aria-hidden="true" />
-            <span className="debug-panel-toggle__count">{liveCount}</span>
-          </>
-        ) : (
-          <span className="debug-panel-toggle__chevron" aria-hidden="true" />
-        )}
-      </button>
+      <div className="strip-column">
+        {toggles}
+        <button
+          ref={expandRef}
+          type="button"
+          className="debug-panel-toggle"
+          aria-expanded={false}
+          aria-label={label}
+          onClick={() => setCollapsed(false)}
+        >
+          {liveCount !== null ? (
+            <>
+              <span className="debug-panel-toggle__dot" aria-hidden="true" />
+              <span className="debug-panel-toggle__count">{liveCount}</span>
+            </>
+          ) : (
+            <span className="debug-panel-toggle__chevron" aria-hidden="true" />
+          )}
+        </button>
+      </div>
     );
   }
 
   if (trams.error !== null) {
     return (
-      <section aria-live="polite" className="debug-panel debug-panel--error">
-        <div className="debug-panel__row">
-          <h2 className="debug-panel__heading">Tram data error</h2>
-          <PanelCollapseButton
-            buttonRef={collapseRef}
-            onCollapse={() => setCollapsed(true)}
-          />
-        </div>
-        <div className="debug-panel__row debug-panel__row--wrap">
-          <p className="debug-panel__error-message">{trams.error.message}</p>
-        </div>
-      </section>
+      <div className="strip-column">
+        {toggles}
+        <section aria-live="polite" className="debug-panel debug-panel--error">
+          <div className="debug-panel__row">
+            <h2 className="debug-panel__heading">Tram data error</h2>
+            <PanelCollapseButton
+              buttonRef={collapseRef}
+              onCollapse={() => setCollapsed(true)}
+            />
+          </div>
+          <div className="debug-panel__row debug-panel__row--wrap">
+            <p className="debug-panel__error-message">{trams.error.message}</p>
+          </div>
+        </section>
+      </div>
     );
   }
 
   if (trams.status === "loading") {
     return (
-      <section aria-live="polite" className="debug-panel">
-        <div className="debug-panel__row">
-          <p className="debug-panel__progress">Loading tram line metadata...</p>
-          <PanelCollapseButton
-            buttonRef={collapseRef}
-            onCollapse={() => setCollapsed(true)}
-          />
-        </div>
-      </section>
+      <div className="strip-column">
+        {toggles}
+        <section aria-live="polite" className="debug-panel">
+          <div className="debug-panel__row">
+            <p className="debug-panel__progress">
+              Loading tram line metadata...
+            </p>
+            <PanelCollapseButton
+              buttonRef={collapseRef}
+              onCollapse={() => setCollapsed(true)}
+            />
+          </div>
+        </section>
+      </div>
     );
   }
 
   if (trams.status === "connecting") {
     return (
-      <section aria-live="polite" className="debug-panel">
-        <div className="debug-panel__row">
-          <p className="debug-panel__progress">
-            Connecting to the tram position stream...
-          </p>
-          <PanelCollapseButton
-            buttonRef={collapseRef}
-            onCollapse={() => setCollapsed(true)}
-          />
-        </div>
-      </section>
+      <div className="strip-column">
+        {toggles}
+        <section aria-live="polite" className="debug-panel">
+          <div className="debug-panel__row">
+            <p className="debug-panel__progress">
+              Connecting to the tram position stream...
+            </p>
+            <PanelCollapseButton
+              buttonRef={collapseRef}
+              onCollapse={() => setCollapsed(true)}
+            />
+          </div>
+        </section>
+      </div>
     );
   }
 
@@ -253,78 +284,83 @@ export function TramStatusPanel({ trams }: { trams: TramPositionsState }) {
   );
 
   return (
-    <section
-      aria-live="polite"
-      className="debug-panel"
-      aria-label="Live tram data status"
-    >
-      <div className="debug-panel__row">
-        <p className="debug-panel__status">
-          <span className="status-dot" aria-hidden="true" />
-          Live &middot; {trams.positions.length} trams
-          {trams.updatedAt !== null && (
-            <>
-              {" "}
-              &middot;{" "}
-              <span className="debug-panel__time">
-                updated{" "}
-                {trams.updatedAt.toLocaleTimeString("en-GB", {
-                  hour: "2-digit",
-                  minute: "2-digit",
-                })}
-              </span>
-            </>
-          )}
-        </p>
-        <PanelCollapseButton
-          buttonRef={collapseRef}
-          onCollapse={() => setCollapsed(true)}
-        />
-      </div>
-      <ul className="debug-panel__chips" aria-label="Tram marker color legend">
-        {TRAM_CATEGORY_LEGEND.map((category) => {
-          // TV-0014: the Unknown chip renders only while an unknown
-          // vehicle number is in the current snapshot - never a zero-count
-          // row, the same conditional pattern as the SpåraKoff chip below.
-          // The known category chips always render, with their live count.
-          if (category.category === "UNKNOWN" && counts.UNKNOWN === 0) {
-            return null;
-          }
-          const chip = CATEGORY_CHIP_LABELS[category.category];
-          return (
-            <li
-              key={category.category}
-              className={`debug-panel__chip debug-panel__chip--${category.category.toLowerCase()}`}
-              title={chip.title}
-            >
-              <span className="debug-panel__chip-swatch" aria-hidden="true" />
-              {/* TV-0012: live count of trams of this type in the current
+    <div className="strip-column">
+      {toggles}
+      <section
+        aria-live="polite"
+        className="debug-panel"
+        aria-label="Live tram data status"
+      >
+        <div className="debug-panel__row">
+          <p className="debug-panel__status">
+            <span className="status-dot" aria-hidden="true" />
+            Live &middot; {trams.positions.length} trams
+            {trams.updatedAt !== null && (
+              <>
+                {" "}
+                &middot;{" "}
+                <span className="debug-panel__time">
+                  updated{" "}
+                  {trams.updatedAt.toLocaleTimeString("en-GB", {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })}
+                </span>
+              </>
+            )}
+          </p>
+          <PanelCollapseButton
+            buttonRef={collapseRef}
+            onCollapse={() => setCollapsed(true)}
+          />
+        </div>
+        <ul
+          className="debug-panel__chips"
+          aria-label="Tram marker color legend"
+        >
+          {TRAM_CATEGORY_LEGEND.map((category) => {
+            // TV-0014: the Unknown chip renders only while an unknown
+            // vehicle number is in the current snapshot - never a zero-count
+            // row, the same conditional pattern as the SpåraKoff chip below.
+            // The known category chips always render, with their live count.
+            if (category.category === "UNKNOWN" && counts.UNKNOWN === 0) {
+              return null;
+            }
+            const chip = CATEGORY_CHIP_LABELS[category.category];
+            return (
+              <li
+                key={category.category}
+                className={`debug-panel__chip debug-panel__chip--${category.category.toLowerCase()}`}
+                title={chip.title}
+              >
+                <span className="debug-panel__chip-swatch" aria-hidden="true" />
+                {/* TV-0012: live count of trams of this type in the current
                   snapshot; the chip's short label carries no count and no
                   category letter (TV-0014). */}
-              <span className="debug-panel__chip-count">
-                {counts[category.category]}
-              </span>
-              <span className="debug-panel__chip-label">{chip.short}</span>
-            </li>
-          );
-        })}
-        {/* TV-0013: the SpåraKoff bar tram has its own chip while car #175
+                <span className="debug-panel__chip-count">
+                  {counts[category.category]}
+                </span>
+                <span className="debug-panel__chip-label">{chip.short}</span>
+              </li>
+            );
+          })}
+          {/* TV-0013: the SpåraKoff bar tram has its own chip while car #175
             is in the current snapshot, in the TV-0012 format; it disappears
             entirely with the car - never a zero-count row. It sits with the
             type chips, before the out-of-service state chip. */}
-        {sparakoffCount > 0 && (
-          <li
-            className="debug-panel__chip debug-panel__chip--sparakoff"
-            title={`${SPARAKOFF_LEGEND_LABEL} (bar tram)`}
-          >
-            <span className="debug-panel__chip-swatch" aria-hidden="true" />
-            <span className="debug-panel__chip-count">{sparakoffCount}</span>
-            <span className="debug-panel__chip-label">
-              {SPARAKOFF_LEGEND_LABEL}
-            </span>
-          </li>
-        )}
-        {/* TV-0011: out-of-service trams keep their category color and
+          {sparakoffCount > 0 && (
+            <li
+              className="debug-panel__chip debug-panel__chip--sparakoff"
+              title={`${SPARAKOFF_LEGEND_LABEL} (bar tram)`}
+            >
+              <span className="debug-panel__chip-swatch" aria-hidden="true" />
+              <span className="debug-panel__chip-count">{sparakoffCount}</span>
+              <span className="debug-panel__chip-label">
+                {SPARAKOFF_LEGEND_LABEL}
+              </span>
+            </li>
+          )}
+          {/* TV-0011: out-of-service trams keep their category color and
             replace the line number with a red dot - not a vehicle type, so
             it sits after the category chips. TV-0027 review round: the
             chip carries its live count - countByCategory excludes the
@@ -333,15 +369,18 @@ export function TramStatusPanel({ trams }: { trams: TramPositionsState }) {
             the snapshot: the status line's total equals the sum of the
             category counts + this count + the SpåraKoff count (0 or 1).
             The mockup's count 3 is that live number, not a constant. */}
-        <li
-          className="debug-panel__chip debug-panel__chip--offline"
-          title={OFFLINE_CHIP_TITLE}
-        >
-          <span className="debug-panel__chip-swatch" aria-hidden="true" />
-          <span className="debug-panel__chip-count">{offlineCount}</span>
-          <span className="debug-panel__chip-label">{OFFLINE_CHIP_SHORT}</span>
-        </li>
-      </ul>
-    </section>
+          <li
+            className="debug-panel__chip debug-panel__chip--offline"
+            title={OFFLINE_CHIP_TITLE}
+          >
+            <span className="debug-panel__chip-swatch" aria-hidden="true" />
+            <span className="debug-panel__chip-count">{offlineCount}</span>
+            <span className="debug-panel__chip-label">
+              {OFFLINE_CHIP_SHORT}
+            </span>
+          </li>
+        </ul>
+      </section>
+    </div>
   );
 }

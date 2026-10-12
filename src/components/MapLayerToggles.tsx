@@ -1,12 +1,13 @@
 /**
  * The map page's layer-visibility toggles (TV-0019 requirement 9, the
- * 2026-10-12 user scope expansion): two round buttons in a vertical group
- * pinned directly above the status strip's collapsed pill anchor - the same
- * `left` as the strip and a higher `bottom`, at the strip's z-index tier
- * (the shared anchor values and the non-overlap arithmetic live in
- * index.css). The button look mirrors the collapsed pill: a 2.5rem oval
- * with the pill's border, background and shadow, so while the strip is
- * collapsed the corner shows three vertically arranged ovals.
+ * 2026-10-12 user scope expansion, reworked 2026-10-12 after the user's
+ * dev-server feedback): two pill buttons pinned directly above the status
+ * strip, inside the strip's own anchored column — the toggles + the
+ * strip/pill live in one bottom-left flex container, so the buttons ride
+ * whatever height the strip has: collapsed pill or expanded strip (which
+ * grows taller on phones where the chips wrap). The buttons look like the
+ * collapsed pill: 70px x 36px ovals, same border/background/shadow, so the
+ * corner reads as a column of matching pills.
  *
  * "HM" toggles the punctuality heatmap (TV-0028), "TO" the tram line
  * overlay (TV-0019); each carries an indicator dot - green while its layer
