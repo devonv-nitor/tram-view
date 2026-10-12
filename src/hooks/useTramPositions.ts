@@ -47,9 +47,13 @@
  * strip says live on the other, that feed's vehicles age toward the 5-minute
  * staleness cutoff (POSITION_STALENESS_MS) and drop from the snapshot after
  * it - a one-feed outage is visible as its vehicles disappearing, never as
- * a strip error; one console.warn per metro outage (not per snapshot) keeps
- * the reason in the console. With metro absent (metro connected never true,
- * metro error never set) the decision is exactly the tram-only world's.
+ * a strip error; one console.warn per outage (not per snapshot), emitted by
+ * the errored feed's own handler and only while the other socket keeps the
+ * strip live, keeps the reason in the console. With metro absent (metro
+ * connected never true, metro error never set) the decision is exactly the
+ * tram-only world's - and there the tram error IS the strip's error, so the
+ * tram-side warn never fires (the warn exists only for the hidden
+ * degradation where the other feed keeps the strip live).
  * One tram-only difference worth naming: the tram-only world's error state
  * vanished the moment a snapshot observed the stream connected (the record
  * WAS the displayed error there); here the displayed error is nulled while
@@ -182,10 +186,16 @@ export function useTramPositions(): TramPositionsState {
    * state shows first: the last reported error is the one whose reason the
    * user most plausibly cares about. */
   const lastErroredStreamRef = useRef<"tram" | "metro" | null>(null);
-  /** TV-0029, review round: set once per metro outage while the tram socket
-   * keeps the strip live (a metro error with tram connected), so the
-   * console.warn about metro markers aging out fires once, not per
-   * snapshot; reset when the metro socket next reports connected. */
+  /** TV-0029, review round: one warn per partial outage, symmetric for the
+   * two feeds. Each ref is set once per outage while the OTHER socket keeps
+   * the strip live (a metro error with tram connected, or a tram error with
+   * metro connected), so the console.warn about that feed's markers aging
+   * out fires once, not per snapshot; each ref resets when its own socket
+   * next reports connected and on teardown. The warn exists only for the
+   * hidden-degradation case - when neither socket is connected the strip
+   * itself shows the error state, so no warn is needed (with metro absent
+   * the tram warn never fires: the tram error is the strip's error there). */
+  const tramOutageWarnedRef = useRef(false);
   const metroOutageWarnedRef = useRef(false);
 
   // Tram line metadata comes from the keyed routing API; without a key the
@@ -432,7 +442,12 @@ export function useTramPositions(): TramPositionsState {
             // healthy again clears its OWN error record (the only places a
             // record clears are its stream's reconnect and teardown) - the
             // state's error follows on the next tick, as before.
-            if (connected) tramErrorRef.current = null;
+            if (connected) {
+              tramErrorRef.current = null;
+              // A healthy tram report ends the current outage (so a later
+              // outage warns once again), like the metro handler below.
+              tramOutageWarnedRef.current = false;
+            }
             // No immediate status application here - the tram-only world
             // recomputed live/connecting on the next snapshot tick, and the
             // tick below still does (applyConnectionStatus runs only from
@@ -455,6 +470,23 @@ export function useTramPositions(): TramPositionsState {
             tramErrorRef.current = error;
             lastErroredStreamRef.current = "tram";
             applyConnectionStatus("tram");
+            // TV-0029, review round 3: partial-outage honesty, symmetric
+            // with the metro handler below - while the metro socket keeps
+            // the strip live, the tram feed's vehicles age toward the 5-min
+            // staleness cutoff and then drop from the snapshot
+            // (POSITION_STALENESS_MS). Warn once per outage, only when the
+            // strip really is staying live on the metro feed - when neither
+            // socket is connected the strip itself shows the error state
+            // (the tram-only world included, where the tram error is the
+            // strip's error), so no warn is needed there; the flag resets
+            // on the next successful tram connection.
+            if (metroLiveRef.current && !tramOutageWarnedRef.current) {
+              tramOutageWarnedRef.current = true;
+              console.warn(
+                "[tram-view] tram stream outage: the strip stays live on the metro feed, tram markers age out after",
+                `${POSITION_STALENESS_MS / 60_000} min without tram positions`,
+              );
+            }
           },
         });
         // TV-0029: the two streams' shared plumbing. Each handle owns its
@@ -464,8 +496,8 @@ export function useTramPositions(): TramPositionsState {
         // the new one's failure). TV-0029, review round: either stream's
         // error counts into the combined status (applyConnectionStatus) -
         // the strip errors only when NEITHER socket is connected, and the
-        // down feed's markers age out after POSITION_STALENESS_MS (the
-        // metro handler below warns once per outage about exactly that).
+        // down feed's markers age out after POSITION_STALENESS_MS (each
+        // handler below warns once per outage about exactly that).
         streamState.tram = {
           close: () => {
             closed = true;
@@ -525,7 +557,10 @@ export function useTramPositions(): TramPositionsState {
             // outage, only when the strip really is staying live on the
             // tram feed - when neither socket is connected the strip itself
             // shows the error, so no warn is needed; the flag resets on the
-            // next successful metro connection.
+            // next successful metro connection. Review round 3: the tram
+            // handler above is the mirror image of this block, so an outage
+            // of either feed warns once while the other keeps the strip
+            // live.
             if (connectedRef.current && !metroOutageWarnedRef.current) {
               metroOutageWarnedRef.current = true;
               console.warn(
@@ -563,6 +598,9 @@ export function useTramPositions(): TramPositionsState {
         // has actually failed. Fresh socket, fresh record.
         tramErrorRef.current = null;
         lastErroredStreamRef.current = null;
+        // The outage warn flag belongs to one stream's lifetime; a fresh
+        // tram stream warns once again if it fails again.
+        tramOutageWarnedRef.current = false;
       }
       if (streamState.metro !== null) {
         streamState.metro.close();
