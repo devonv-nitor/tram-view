@@ -61,10 +61,16 @@ const BEHIND_COLOR = "#d32f2f";
 const AHEAD_COLOR = "#34d399";
 
 /** Peak blob alpha at |dl| = MAX_CONTRIBUTING_DL_S; the ramp is linear in
- * |dl| from 0 at the deadband to this at the clamp. Doubled from the
- * original 0.35 at the user's 2026-10-12 review feedback: 1-2-minute
- * deviations were barely perceptible. */
+ * |dl| from BASE_ALPHA at the deadband edge to this at the clamp. 0.7 since
+ * the user's 2026-10-12 tuning (doubled from 0.35, then the base floor
+ * added below). */
 const PEAK_ALPHA = 0.7;
+
+/** The alpha a blob carries at the deadband's edge: once a tram is
+ * measurably off-timetable (outside the 20 s deadband) its blob is already
+ * visible at 0.1 instead of fading up from nothing, per the user's
+ * 2026-10-12 tuning. */
+const BASE_ALPHA = 0.1;
 
 /** The heatmap's own pane name and z-index, slotted between the basemap and
  * everything else (tilePane 200 < this 250 < overlayPane 400 < markerPane
@@ -190,11 +196,11 @@ export class PunctualityHeatmapLayer {
       if (absDl > MAX_CONTRIBUTING_DL_S) continue;
       if (absDl < NEUTRAL_DL_S) continue;
 
-      // dl -> color + alpha. Linear ramp: 0 at the deadband, PEAK_ALPHA at
-      // the ±900 s clamp.
+      // dl -> color + alpha. Linear ramp: BASE_ALPHA at the deadband edge,
+      // PEAK_ALPHA at the ±900 s clamp.
       const t = (absDl - NEUTRAL_DL_S) / (MAX_CONTRIBUTING_DL_S - NEUTRAL_DL_S);
       const color = dl < 0 ? BEHIND_COLOR : AHEAD_COLOR;
-      const alpha = PEAK_ALPHA * t;
+      const alpha = BASE_ALPHA + (PEAK_ALPHA - BASE_ALPHA) * t;
 
       const point = this.map.latLngToLayerPoint([position.lat, position.lon]);
       // Cull against the viewport's layer-space rectangle: the canvas is
