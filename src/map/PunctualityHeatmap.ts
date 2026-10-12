@@ -27,8 +27,13 @@
  * tilePane 200 < heatmap 250 < route-overlay 400 < markerPane 600), one
  * <canvas> sized to the viewport, pointer-events: none, full redraw per
  * snapshot (~1/s; the fleet is small, simplicity wins) and on zoom/move so
- * blobs stay geographically anchored. No toggle, no legend entry: always-on,
- * per ADR-0001's overlay precedent.
+ * blobs stay geographically anchored. No legend entry. The layer's
+ * visibility is user-toggleable since 2026-10-12 (TV-0019 requirement 9,
+ * superseding the ADR-0001 overlay precedent's always-on rule): `setEnabled`
+ * stops the rendering (the canvas is cleared, snapshots and viewport events
+ * skip the draw) without touching the feed or the geometry source; the
+ * positions keep flowing into it, so re-enabling shows the current field
+ * on the next update or viewport event.
  */
 import L from "leaflet";
 import type { TramPosition } from "../lib/digitransit.ts";
@@ -86,6 +91,7 @@ export class PunctualityHeatmapLayer {
   private readonly canvas: HTMLCanvasElement;
   private readonly pane: HTMLElement;
   private mapSize: L.Point | null = null;
+  private enabled = true;
 
   constructor(private readonly map: L.Map) {
     map.createPane(PANE_NAME);
@@ -113,6 +119,19 @@ export class PunctualityHeatmapLayer {
    * no-op ticks. */
   update(positions: TramPosition[]): void {
     this.render(positions);
+  }
+
+  /** Sets the layer's visibility (TV-0019 requirement 9's toggle). Disabled,
+   * `render` clears the canvas and redraws nothing while the positions keep
+   * flowing into `lastPositions`, so re-enabling renders the current field
+   * on the next update or viewport event - no stored snapshot is replayed.
+   * The pane and its listeners stay: the layer object is never rebuilt, so
+   * toggling cannot alter the pane's z-order (requirement 9). */
+  setEnabled(enabled: boolean): void {
+    this.enabled = enabled;
+    if (!enabled) {
+      this.clear();
+    }
   }
 
   /** Removes the pane and unbinds the listeners; called on map teardown. */
@@ -169,8 +188,24 @@ export class PunctualityHeatmapLayer {
     this.canvas.height = Math.round(size.y * dprSafe());
   }
 
+  /** Clears the canvas without touching its size: the "off" state is an
+   * empty field, not a shrunken one (setEnabled). */
+  private clear(): void {
+    const ctx = this.canvas.getContext("2d");
+    const size = this.mapSize;
+    if (ctx === null || size === null) return;
+    // The DPR transform survives a clearRect, so one clear covers the
+    // whole bitmap in CSS pixels.
+    ctx.clearRect(0, 0, size.x, size.y);
+  }
+
   private render(positions: TramPosition[]): void {
     this.lastPositions = positions;
+    // TV-0019 requirement 9: while the layer is toggled off it draws
+    // nothing; `lastPositions` is still recorded so re-enabling renders the
+    // current field on the next update or viewport event (the same guard
+    // covers the snapshot path and the viewport path).
+    if (!this.enabled) return;
     const size = this.mapSize;
     if (size === null) return;
     const ctx = this.canvas.getContext("2d");

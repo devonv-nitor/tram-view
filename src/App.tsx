@@ -1,4 +1,6 @@
+import { useState } from "react";
 import MapView from "./map/MapView";
+import { MapLayerToggles } from "./components/MapLayerToggles";
 import { TramStatusPanel } from "./components/TramStatusPanel";
 import { useTramPositions } from "./hooks/useTramPositions";
 import { useHashRoute } from "./hooks/useHashRoute";
@@ -13,12 +15,28 @@ import {
  * mounted only when the route is the map: mounting it while the vehicle
  * overview is shown would open the network-wide position stream next to the
  * overview's vehicle-scoped one, which ADR-0004 forbids.
+ * TV-0019 requirement 9: it also owns the layer-visibility toggles'
+ * per-session state - the buttons live in MapLayerToggles, the layers in
+ * MapView, and this is the component above both - so the toggle state flows
+ * down as props (default ON on every load, never persisted).
  */
 function MapPage() {
   const trams = useTramPositions();
+  const [heatmapOn, setHeatmapOn] = useState(true);
+  const [overlayOn, setOverlayOn] = useState(true);
   return (
     <main className="app">
-      <MapView positions={trams.positions} />
+      <MapView
+        positions={trams.positions}
+        heatmapOn={heatmapOn}
+        overlayOn={overlayOn}
+      />
+      <MapLayerToggles
+        heatmapOn={heatmapOn}
+        overlayOn={overlayOn}
+        onToggleHeatmap={() => setHeatmapOn((on) => !on)}
+        onToggleOverlay={() => setOverlayOn((on) => !on)}
+      />
       <TramStatusPanel trams={trams} />
     </main>
   );

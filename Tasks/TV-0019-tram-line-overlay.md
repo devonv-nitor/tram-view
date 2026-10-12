@@ -178,7 +178,7 @@ lines 1-15 and the variants (`10B`, `10H`, `11H`, `13H`, `1H`, `1T`, `2H`,
 
 ## Handoff (status: REVIEW → DONE — optional, delete before merge)
 
-### Implementation
+### Implementation (the overlay, merged into main; unchanged below)
 
 - `src/lib/digitransit.ts`: `loadTramNetworkGeometry()` +
   `TRAM_NETWORK_GEOMETRY_QUERY` (added at the end of the file, after
@@ -211,6 +211,54 @@ lines 1-15 and the variants (`10B`, `10H`, `11H`, `13H`, `1H`, `1T`, `2H`,
 - `Docs/digitransit.md`: overlay row in the data-architecture table + a
   TV-0019 paragraph.
 - `package.json` unchanged; no new dependency.
+
+### Handoff addendum 2026-10-12 — requirement 9 (the toggles), implemented
+
+- `src/components/MapLayerToggles.tsx` (new): the two buttons ("HM" =
+  punctuality heatmap, "TO" = tram line overlay), `aria-pressed` + spelled-out
+  accessible names ("Toggle the punctuality heatmap, on"), 2.5rem ovals
+  matching the collapsed pill; the state is owned by MapPage and passed down
+  as props - this component never touches the layers.
+- `src/App.tsx`: MapPage owns the per-session `useState(true)` per layer
+  (nothing persisted, default ON every load) and passes it to
+  MapLayerToggles (UI) and MapView (the layers).
+- `src/map/MapView.tsx`: two props (`heatmapOn`, `overlayOn`) forwarded to
+  the imperative layers by two separate `useEffect`s on refs, null-guarded
+  (the overlay does not exist without a key); the dispose ordering is
+  untouched.
+- `src/map/PunctualityHeatmap.ts`: `setEnabled(false)` clears the canvas;
+  `render` early-returns while off but still records `lastPositions`, so
+  re-enabling shows the current field on the next update or viewport event.
+  One guard covers both draw paths (snapshot + viewport events).
+- `src/map/TramLineOverlay.ts`: `setEnabled` toggles the pane's
+  `visibility` style - the polylines stay in the pane in the DOM, nothing
+  is removed or rebuilt, the casing-then-green draw order and the pane's
+  z-index are untouched, and the geometry request policy is unchanged
+  (one request per session fired at map mount, regardless of toggle state).
+- `src/index.css`: `.map-layer-toggles` / `.map-layer-toggle` - the group at
+  `left: 1rem; bottom: 5.25rem; z-index: 640` (the strip's tier, above the
+  map, below the controls; 2.25rem + 2.5rem pill + 0.5rem gap clears the
+  pill whose top sits at 4.75rem), buttons mirroring the collapsed pill
+  (same 2.5rem oval, border, Canvas background, shadow), indicator dot
+  green while on (`light-dark(#137333, #34d399)`, the strip dot's hues) and
+  gray while off.
+- `Docs/digitransit.md` + `Docs/ADR/0001-map-library.md`: the supersession
+  recorded (both layers' always-on rules).
+- package.json unchanged; no new dependency.
+
+### Evidence (requirement 9 work, 2026-10-12)
+
+Checks: `npm run lint`, `npm run format:check`, `npm run build` all green;
+`dist/` deleted after the build. No dev server, no browser automation, no
+screenshots (per the task flow, the human verifies the running app after the
+reviewer's PASS). Toggle-behavior evidence is code-level: the heatmap's
+guard sits in the single `render` used by both draw paths; the overlay's
+switch is the pane's `visibility` style with polylines retained. Per-session
+state and default ON are structural (`useState(true)` in MapPage). No
+tracked file contains the key; `git diff` shows no package.json change. The
+human verification checklist (acceptance 2 network log, acceptance 8
+toggle behavior, stacking) is with the coordinator, as the task flow
+prescribes.
 
 ### Evidence
 

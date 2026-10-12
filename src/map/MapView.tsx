@@ -25,9 +25,20 @@ import {
  * are managed imperatively in TramMarkerLayer, above the basemap; the tram
  * line overlay (TV-0019, ADR-0001 overlay amendment) in TramLineOverlay and
  * the punctuality heatmap (TV-0028) ride between the tiles and the markers
- * as their own panes.
+ * as their own panes. TV-0019 requirement 9: the overlay's and the
+ * heatmap's visibility are user-toggled (MapPage owns the per-session
+ * state; MapLayerToggles renders the buttons) and reach the imperative
+ * layers through the `layerOn` props and these effects.
  */
-export default function MapView({ positions }: { positions: TramPosition[] }) {
+export default function MapView({
+  positions,
+  heatmapOn,
+  overlayOn,
+}: {
+  positions: TramPosition[];
+  heatmapOn: boolean;
+  overlayOn: boolean;
+}) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const markersRef = useRef<TramMarkerLayer | null>(null);
   const overlayRef = useRef<TramLineOverlay | null>(null);
@@ -92,6 +103,22 @@ export default function MapView({ positions }: { positions: TramPosition[] }) {
       map.remove();
     };
   }, []);
+
+  // TV-0019 requirement 9: the toggles reach the imperative layers through
+  // refs. The effects run on the props (default ON on every load; the
+  // toggle state is per-session), guard the nulls (the layers do not exist
+  // before the mount effect runs, and with no key the overlay never
+  // exists), and are keyed separately so toggling one button never touches
+  // the other layer's state. `setEnabled` neither rebuilds nor reorders
+  // anything (the overlay's pane is hidden in place; the heatmap skips its
+  // draw), so the dispose ordering below is untouched.
+  useEffect(() => {
+    heatmapRef.current?.setEnabled(heatmapOn);
+  }, [heatmapOn]);
+
+  useEffect(() => {
+    overlayRef.current?.setEnabled(overlayOn);
+  }, [overlayOn]);
 
   // Positions arrive as a new array only when the snapshot actually changed
   // (see useTramPositions), so this sync runs ~1/s while trams move and

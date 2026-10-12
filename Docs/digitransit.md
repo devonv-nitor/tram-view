@@ -329,8 +329,13 @@ behind, transparent inside the ±20 s deadband, alpha ramping linearly to
 tram (no timetable to deviate from), and |dl| <= 900 s - the user's
 opetusajo filter (2026-10-08): a training/testing run's deviation is noise,
 and a vehicle beyond ±15 min is excluded entirely, not clamped into the
-scale. The layer is always on with no toggle and no legend entry (the
-ADR-0001 overlay precedent). The honesty limits are the popup's own: `dl`
+scale. The layer is user-toggleable since 2026-10-12 (TV-0019 requirement
+9): the map page's `HM` button stops and restarts the rendering — the
+canvas is cleared and redraws are skipped while the positions keep flowing
+into the layer, so re-enabling shows the current field — with no new
+request of any kind. It has no legend entry (the ADR-0001 overlay
+precedent's toggle rule is superseded by the same scope expansion). The
+honesty limits are the popup's own: `dl`
 is recomputed only at stop events, so a blob shows the vehicle's
 *last-reported* deviation and can lag reality by up to a stop event; and
 only vehicles currently reporting color the map - an uncolored area means
@@ -364,4 +369,9 @@ the data client's error state). Measured live 2026-09-28: HTTP 200, 31 routes /
 150 patterns / 25 319 coordinates, 861 404 bytes uncompressed (93 714 B
 transferred gzipped), matching the amendment's 2026-09-25 probe. The response
 carries no service-date or freshness field, so the overlay is as fresh as the
-GTFS the Routing API serves at request time.
+GTFS the Routing API serves at request time. TV-0019 requirement 9
+(2026-10-12): the overlay is always loaded (the one session-cached request is
+unchanged, regardless of the toggle state) but its visibility is
+user-toggleable - the map page's `TO` button hides the pane in place (the
+polylines stay in the DOM), next to the `HM` button that toggles the
+punctuality heatmap, both above the status strip's pill anchor.

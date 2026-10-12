@@ -378,6 +378,71 @@ body {
   color: color-mix(in srgb, CanvasText 62%, transparent);
 }
 
+/* TV-0019 requirement 9 (2026-10-12 scope expansion): the layer-visibility
+   toggles - two round buttons in a vertical group directly above the
+   collapsed pill's anchor. The group is plain absolutely-positioned DOM in
+   .app (a sibling of .map-view, like the strip - NOT a Leaflet pane), so it
+   shares the strip's z-index tier: above the map pane's subtree (400), at
+   the strip's 640, below the Leaflet controls (1000). The geometry clears
+   the pill: the pill is 2.5rem tall at bottom 2.25rem (its top at
+   4.75rem), so the group's bottom 5.25rem = 2.25rem + 2.5rem + 0.5rem
+   clears it by the task's small gap, with the same 0.5rem between the two
+   stacked buttons.
+   The button look mirrors the collapsed pill: the same 2.5rem oval
+   (border-radius 50%), the same border/background/shadow recipe, so with
+   the strip collapsed the corner shows three vertically arranged ovals.
+   The color scheme is tracked like the pill (Canvas/CanvasText), and the
+   buttons are fixed against the viewport exactly like the strip - they do
+   not pan or zoom with the map. */
+.map-layer-toggles {
+  position: absolute;
+  left: 1rem;
+  bottom: 5.25rem;
+  z-index: 640;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.map-layer-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.3rem;
+  width: 2.5rem;
+  height: 2.5rem;
+  padding: 0;
+  border: 1px solid color-mix(in srgb, CanvasText 40%, transparent);
+  border-radius: 50%;
+  background: color-mix(in srgb, Canvas 92%, transparent);
+  color: CanvasText;
+  font: inherit;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  letter-spacing: -0.2px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.18);
+  cursor: pointer;
+}
+
+/* The indicator dot: the same green as the status line's live dot while
+   the layer shows (the scheme-aware hue pair above, .status-dot), the
+   button border's 40%-CanvasText gray while it is off - the same muted
+   scheme-aware treatment as the strip's secondary tones. */
+.map-layer-toggle__dot {
+  width: 8px;
+  height: 8px;
+  flex: none;
+  border-radius: 50%;
+}
+
+.map-layer-toggle[aria-pressed="true"] .map-layer-toggle__dot {
+  background: light-dark(#137333, #34d399);
+}
+
+.map-layer-toggle[aria-pressed="false"] .map-layer-toggle__dot {
+  background: color-mix(in srgb, CanvasText 40%, transparent);
+}
+
 /* Tram markers (TV-0005, TV-0008) sit on the OpenStreetMap raster tiles, which
    are always light regardless of the UI color-scheme. Their colors are
    therefore fixed rather than color-scheme aware: a user-specified brand hue

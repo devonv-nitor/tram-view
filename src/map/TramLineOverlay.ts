@@ -19,7 +19,12 @@
  * renderer, where later-added paths paint above earlier ones - so every
  * green line sits above every casing without per-pattern z-index work.
  *
- * The overlay is always on: no toggle, no legend entry, no other UI control.
+ * The overlay's visibility is user-toggleable since 2026-10-12 (TV-0019
+ * requirement 9, superseding the always-on clause below): `setEnabled`
+ * hides and shows the pane while the polylines stay in it - nothing is
+ * removed or rebuilt, so toggling cannot change the draw order or the
+ * stacking. The geometry request policy is unchanged: one request per
+ * session, fired when the map page mounts, regardless of the toggle state.
  * It is created once, when the geometry resolves, and the ~1 Hz marker
  * refresh (TramMarkerLayer.update) never touches the polyline set. The
  * loader is only called with the app's existing key (MapView, like the
@@ -136,6 +141,19 @@ export class TramLineOverlay {
     }
     for (const polyline of this.greenPolylines) {
       polyline.setStyle({ weight: width.line });
+    }
+  }
+
+  /** Sets the overlay's visibility (TV-0019 requirement 9's toggle). The
+   * pane's `visibility` style is the off switch: the polylines stay in the
+   * pane in the DOM - nothing is removed or rebuilt - so toggling cannot
+   * disturb the draw order, the casing-then-green ordering, or the pane's
+   * z-order, and a re-enable is instant with no redraw work. Zoom-end
+   * width updates while hidden are harmless (the pane is not painted). */
+  setEnabled(enabled: boolean): void {
+    const pane = this.map.getPane(TRAM_OVERLAY_PANE);
+    if (pane) {
+      pane.style.visibility = enabled ? "" : "hidden";
     }
   }
 
