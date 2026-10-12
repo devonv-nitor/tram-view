@@ -59,3 +59,64 @@ export const MAP_TILE_ATTRIBUTION =
 export function mapTileUrl(subscriptionKey: string): string {
   return `${MAP_TILE_URL}?digitransit-subscription-key=${encodeURIComponent(subscriptionKey)}`;
 }
+
+/**
+ * TV-0019 (ADR-0001 overlay amendment): the tram line overlay's own Leaflet
+ * pane. The pane's z-index sits between `tilePane` (200) and `markerPane`
+ * (600), so the overlay draws above the basemap and below the tram markers;
+ * the pane is non-interactive, so markers, popups and the status panel stay
+ * on top and clickable. `createPane("tramLineOverlay")` gives the div the
+ * class `leaflet-tramLineOverlay-pane`.
+ */
+export const TRAM_OVERLAY_PANE = "tramLineOverlay";
+export const TRAM_OVERLAY_PANE_Z_INDEX = 350;
+
+/** HSL tram green, the color HSL's own products render tram routes with
+ * (ADR-0001 overlay amendment). */
+export const TRAM_LINE_COLOR = "#00985F";
+
+/** The casing color under the green line. Leaflet has no casing option, so
+ * HSL's tram rendering (a wider white polyline under a narrower green one)
+ * is two polylines per pattern, ordered by draw order within the pane. */
+export const TRAM_LINE_CASING_COLOR = "#FFFFFF";
+
+/**
+ * TV-0019: the overlay's per-zoom polyline widths, stated per the amendment.
+ * One entry per zoom level; the first whose `maxZoom` is >= the map zoom
+ * wins, the last entry covers the rest. The casing is the wider white line;
+ * the green line is drawn on top, ~2 px narrower at every zoom. The z11-13
+ * entries stay modest so the casing does not get heavy under the ~150 live
+ * markers at the network-overview zooms: at z11-13 the casing is 4-5 px
+ * against a 28 px marker body. The widths were verified to apply per zoom in
+ * the DOM (Tasks/TV-0019-tram-line-overlay.md); the amendment's
+ * documented-deviation escape (dropping the casing at z11-13) was not
+ * needed.
+ */
+const TRAM_LINE_WIDTHS: readonly {
+  maxZoom: number;
+  casing: number;
+  line: number;
+}[] = [
+  { maxZoom: 12, casing: 4, line: 2 },
+  { maxZoom: 13, casing: 5, line: 2.5 },
+  { maxZoom: 14, casing: 6, line: 3 },
+  { maxZoom: 15, casing: 7, line: 3.5 },
+  { maxZoom: 16, casing: 8, line: 4 },
+  { maxZoom: 17, casing: 9, line: 4.5 },
+  { maxZoom: 18, casing: 10, line: 5 },
+  { maxZoom: 19, casing: 11, line: 5.5 },
+];
+
+/** The overlay's casing and green-line widths at one zoom level. */
+export function tramLineWidths(zoom: number): {
+  casing: number;
+  line: number;
+} {
+  for (const entry of TRAM_LINE_WIDTHS) {
+    if (zoom <= entry.maxZoom) {
+      return { casing: entry.casing, line: entry.line };
+    }
+  }
+  const last = TRAM_LINE_WIDTHS[TRAM_LINE_WIDTHS.length - 1];
+  return { casing: last.casing, line: last.line };
+}

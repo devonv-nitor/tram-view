@@ -4,6 +4,7 @@ import "leaflet/dist/leaflet.css";
 import type { TramPosition } from "../lib/digitransit.ts";
 import { tryGetDigitransitApiKey } from "../lib/digitransit.ts";
 import { TramMarkerLayer } from "./TramMarkers";
+import { TramLineOverlay } from "./TramLineOverlay";
 import { PunctualityHeatmapLayer } from "./PunctualityHeatmap";
 import {
   DEFAULT_MAP_ZOOM,
@@ -21,12 +22,26 @@ import {
  * Basemap per the Docs/ADR/0001-map-library.md amendment: Leaflet + the
  * Digitransit Map API's `hsl-map` tiles (TV-0018), which need the same
  * subscription key as the line-metadata query. Live tram markers (TV-0005)
- * are managed imperatively in TramMarkerLayer, above the basemap; the
- * punctuality heatmap (TV-0028) rides between them as its own pane.
+ * are managed imperatively in TramMarkerLayer, above the basemap; the tram
+ * line overlay (TV-0019, ADR-0001 overlay amendment) in TramLineOverlay and
+ * the punctuality heatmap (TV-0028) ride between the tiles and the markers
+ * as their own panes. TV-0019 requirement 9: the overlay's and the
+ * heatmap's visibility are user-toggled (MapPage owns the per-session
+ * state; MapLayerToggles renders the buttons) and reach the imperative
+ * layers through the `layerOn` props and these effects.
  */
-export default function MapView({ positions }: { positions: TramPosition[] }) {
+export default function MapView({
+  positions,
+  heatmapOn,
+  overlayOn,
+}: {
+  positions: TramPosition[];
+  heatmapOn: boolean;
+  overlayOn: boolean;
+}) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const markersRef = useRef<TramMarkerLayer | null>(null);
+  const overlayRef = useRef<TramLineOverlay | null>(null);
   const heatmapRef = useRef<PunctualityHeatmapLayer | null>(null);
 
   useEffect(() => {
@@ -54,12 +69,19 @@ export default function MapView({ positions }: { positions: TramPosition[] }) {
         minZoom: MIN_MAP_ZOOM,
         maxZoom: MAX_MAP_ZOOM,
       }).addTo(map);
+      // TV-0019: the tram line overlay rides one session-cached Routing API
+      // request (ADR-0001 overlay amendment), asked for only here on the map
+      // page; with no key there is no basemap and no overlay request - both
+      // degrade to nothing, nothing throws.
+      const overlay = new TramLineOverlay(map);
+      overlayRef.current = overlay;
+      overlay.load(subscriptionKey);
     }
 
     markersRef.current = new TramMarkerLayer(map);
     // TV-0028: the punctuality field rides the same snapshot feed as the
     // markers; its pane (z 250) sits above the basemap and below the route
-    // overlay tier (400) and the markers (600).
+    // overlay's tier (350) and the markers (600).
     heatmapRef.current = new PunctualityHeatmapLayer(map);
 
     // Leaflet tracks window resizes, but the container can also change size
@@ -72,6 +94,8 @@ export default function MapView({ positions }: { positions: TramPosition[] }) {
 
     return () => {
       resizeObserver.disconnect();
+      overlayRef.current?.dispose();
+      overlayRef.current = null;
       markersRef.current?.dispose();
       markersRef.current = null;
       heatmapRef.current?.dispose();
@@ -79,6 +103,22 @@ export default function MapView({ positions }: { positions: TramPosition[] }) {
       map.remove();
     };
   }, []);
+
+  // TV-0019 requirement 9: the toggles reach the imperative layers through
+  // refs. The effects run on the props (default ON on every load; the
+  // toggle state is per-session), guard the nulls (the layers do not exist
+  // before the mount effect runs, and with no key the overlay never
+  // exists), and are keyed separately so toggling one button never touches
+  // the other layer's state. `setEnabled` neither rebuilds nor reorders
+  // anything (the overlay's pane is hidden in place; the heatmap skips its
+  // draw), so the dispose ordering below is untouched.
+  useEffect(() => {
+    heatmapRef.current?.setEnabled(heatmapOn);
+  }, [heatmapOn]);
+
+  useEffect(() => {
+    overlayRef.current?.setEnabled(overlayOn);
+  }, [overlayOn]);
 
   // Positions arrive as a new array only when the snapshot actually changed
   // (see useTramPositions), so this sync runs ~1/s while trams move and
