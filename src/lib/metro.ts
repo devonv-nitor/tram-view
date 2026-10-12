@@ -88,10 +88,11 @@ export function metroClassTooltip(vehicleNumber: number): string {
   }
 }
 
-/** The metro marker's body color: HSL metro line blue (TV-0029 requirement
- * 3: one blue for all three classes - the classes are distinguishable by
- * tooltip/vehicle number, and three shades would be indistinguishable at
- * marker scale; per-class colors would be a one-constant change per class at
- * review). Fixed like the tram marker colors: the basemap under the markers
- * is always light. */
-export const METRO_MARKER_COLOR = "#0072bc";
+/** The metro marker's body color: HSL's official metro orange (user decision
+ * 2026-10-12, recorded in TV-0029 requirement 3's amendment - it supersedes
+ * the task's original blue). One color for all three classes - the classes
+ * are distinguishable by tooltip/vehicle number, and three shades would be
+ * indistinguishable at marker scale; per-class colors would be a
+ * one-constant change per class at review. Fixed like the tram marker
+ * colors: the basemap under the markers is always light. */
+export const METRO_MARKER_COLOR = "#f15f22";

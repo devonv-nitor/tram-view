@@ -77,12 +77,13 @@ export const TRAM_OVERLAY_PANE_Z_INDEX = 350;
  * (ADR-0001 overlay amendment). */
 export const TRAM_LINE_COLOR = "#00985F";
 
-/** TV-0029: the metro line overlay color - HSL metro line blue, the hue
- * HSL's own products render metro routes with (the user-supplied
- * `#0072bc`). It must read against the same light basemap the tram green
- * does, and stay distinct from it where the corridors cross. Fixed like the
- * tram color (the basemap is always light). */
-export const METRO_LINE_COLOR = "#0072bc";
+/** TV-0029: the metro line overlay color - HSL's official metro orange
+ * (user decision 2026-10-12, recorded in TV-0029 requirement 7's amendment;
+ * it supersedes the task's original blue). It must read against the same
+ * light basemap the tram green does, and stay distinct from it where the
+ * corridors cross. Fixed like the tram color (the basemap is always
+ * light). */
+export const METRO_LINE_COLOR = "#F15F22";
 
 /** The casing color under the green line. Leaflet has no casing option, so
  * HSL's tram rendering (a wider white polyline under a narrower green one)

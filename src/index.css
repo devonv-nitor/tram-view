@@ -32,13 +32,14 @@
      hue; like the brand A/B/C bodies it is light enough that the label ink
      switches to dark (contrast below). */
   --tram-type-sparakoff: #eb4f49;
-  /* Metro train body (TV-0029): HSL metro line blue, one hue for every
+  /* Metro train body (TV-0029): HSL's official metro orange (user decision
+     2026-10-12, supersedes the task's original blue), one hue for every
      metro class (the classes are distinguishable by tooltip/vehicle number,
      not by color). Fixed like the tram marker colors: the basemap under the
      markers is always light. Shared with the overlay's metro corridor color
      (src/map/constants.ts's METRO_LINE_COLOR is the same value by design;
      the marker's copy lives here next to the other marker colors). */
-  --tram-type-metro: #0072bc;
+  --tram-type-metro: #f15f22;
 }
 
 * {
