@@ -1,6 +1,6 @@
 # Tram view plan
 
-Status: `TV-0020 (the overview's stop sequence resolved from the vehicle's live trip) and TV-0021 (the overview's always-0 occupancy field removed) are DONE, merged together at d0a747a and re-verified on the deployed site; TV-0018 (HSL basemap tiles) is DONE, merged and re-verified on the deployed site; TV-0022 (a tram's line resolved from the Routing API's live trip when its HFP route id is not a GTFS route id; user decision 2026-09-25: option A) is DONE, merged at 3e7f94f and re-verified on the deployed site; TV-0023 (the marker click popup replaced by the compact HUD dashboard the user chose, mockup 1) is DONE, merged at 8602955 and re-verified on the deployed site; TV-0025 (the popup's Heading cell replaced by an ETA to the next stop, in seconds, from the Routing API's live-trip timetable corrected by the reported deviation) is DONE, merged at 9d0a3f1 and re-verified on the deployed site; TV-0026 (the popup's ETA anchored to the day the tram is running, and the muted dash for a materially passed estimate - the user's 2026-09-28 report of trams stuck at `0 s`) is DONE, merged at 640470d and re-verified on the deployed site; TV-0019 (tram line overlay: user decision 2026-09-28 - draw it, from the Routing API, every pattern; ADR-0001 overlay amendment; 2026-10-12 scope expansion: the overlay and heatmap gained the `TO`/`HM` visibility toggles, which supersede both layers' always-on rules) is REVIEW, queued ahead of [TV-0024](Tasks/TV-0024-retire-debug-route-plumbing.md) because both edit `src/lib/digitransit.ts`; TV-0002..TV-0017 are merged, delta-reviewed and retired (MVP accepted; ADR-0003 key policy live; ADR-0004 vehicle overview page live; ADR-0001/ADR-0003 basemap amendments implemented by TV-0018).`
+Status: `TV-0020 (the overview's stop sequence resolved from the vehicle's live trip) and TV-0021 (the overview's always-0 occupancy field removed) are DONE, merged together at d0a747a and re-verified on the deployed site; TV-0018 (HSL basemap tiles) is DONE, merged and re-verified on the deployed site; TV-0022 (a tram's line resolved from the Routing API's live trip when its HFP route id is not a GTFS route id; user decision 2026-09-25: option A) is DONE, merged at 3e7f94f and re-verified on the deployed site; TV-0023 (the marker click popup replaced by the compact HUD dashboard the user chose, mockup 1) is DONE, merged at 8602955 and re-verified on the deployed site; TV-0025 (the popup's Heading cell replaced by an ETA to the next stop, in seconds, from the Routing API's live-trip timetable corrected by the reported deviation) is DONE, merged at 9d0a3f1 and re-verified on the deployed site; TV-0026 (the popup's ETA anchored to the day the tram is running, and the muted dash for a materially passed estimate - the user's 2026-09-28 report of trams stuck at `0 s`) is DONE, merged at 640470d and re-verified on the deployed site; TV-0019 (tram line overlay: user decision 2026-09-28 - draw it, from the Routing API, every pattern; ADR-0001 overlay amendment; 2026-10-12 scope expansion: the overlay and heatmap gained the `TO`/`HM` visibility toggles, which supersede both layers' always-on rules) is DONE, merged at 6123af1 after the user verified the overlay and toggles on the dev server (two anchoring rework rounds) and approved the merge; TV-0024 (retire the dead debug route plumbing) is READY; TV-0002..TV-0017 are merged, delta-reviewed and retired (MVP accepted; ADR-0003 key policy live; ADR-0004 vehicle overview page live; ADR-0001/ADR-0003 basemap amendments implemented by TV-0018).`
 
 The application is a live view of all of the trams currently active in the HSL network,
 providing an at-a-glance view of the state of the tram system.
@@ -9,19 +9,19 @@ providing an at-a-glance view of the state of the tram system.
 
 | Task | Deliverable |
 | ---- | ----------- |
-| [TV-0019](Tasks/TV-0019-tram-line-overlay.md) — `REVIEW` | Tram line overlay on the basemap: every pattern of every tram route from the Routing API (one session-cached request, map page only) drawn above the basemap and below the markers, HSL white casing + `#00985F`; 2026-10-12 scope expansion: `HM`/`TO` visibility toggles above the strip's pill anchor (the heatmap's always-on decision superseded). Decision: [ADR-0001 overlay amendment](Docs/ADR/0001-map-library.md) |
-| [TV-0024](Tasks/TV-0024-retire-debug-route-plumbing.md) — `READY` | Remove the TV-0016 debug route-resolution plumbing whose only consumer was the deleted debug popup. Queued behind TV-0019 (both edit `src/lib/digitransit.ts`) |
+| [TV-0024](Tasks/TV-0024-retire-debug-route-plumbing.md) — `READY` | Remove the TV-0016 debug route-resolution plumbing whose only consumer was the deleted debug popup. Unqueued (TV-0019 merged) |
 
 
 ## Completed work
 
-All work through TV-0018 is merged and retired; the retired
+All work through TV-0019 is merged and retired; the retired
 tasks are listed below. New work is defined from
 [_template.md](Tasks/_template.md) and listed under
 [Open work](#open-work).
 
 | Task                                           | Deliverable                                                       |
 | ---------------------------------------------- | ----------------------------------------------------------------- |
+| ~~[TV-0019](Docs/ADR/0001-map-library.md)~~    | DONE — Tram line overlay (every pattern, one session-cached Routing API request; pane z 350) + the `HM`/`TO` layer toggles (2026-10-12 scope expansion); merged at 6123af1 after the user's dev-server approval |
 | ~~[TV-0003](Docs/ADR/0001-map-library.md)~~    | DONE — Helsinki map view (Leaflet + OSM raster)                   |
 | ~~[TV-0004](Docs/ADR/0002-data-transport.md)~~ | DONE — Digitransit HFP client + local API key handling            |
 | ~~TV-0005~~                                    | DONE — Live tram markers (circles with line numbers)              |
