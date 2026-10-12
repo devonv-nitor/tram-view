@@ -1,6 +1,6 @@
 ---
 id: TV-0019
-status: REVIEW
+status: IN_PROGRESS
 owner: agent
 gatekeeper: human
 required_approvals: []
@@ -48,15 +48,19 @@ lines 1-15 and the variants (`10B`, `10H`, `11H`, `13H`, `1H`, `1T`, `2H`,
    displayed set, report that difference rather than silently filtering it away
    or silently drawing the extra lines.
 3. **Stacking.** The overlay is non-interactive and draws above the basemap and
-   below the tram markers: a pane whose z-index is between `tilePane` (200) and
-   `markerPane` (600). Markers, their popups and the status panel stay on top
-   and clickable, markers keep their current colors and direction rotors, and
-   the overlay must not capture clicks that today reach the map or a marker.
+   below the tram markers: a pane whose z-index is between the punctuality
+   heatmap's pane (z 250, TV-0028, merged 2026-10-12) and `markerPane` (600);
+   the implemented tier is 350, giving tiles 200 < heatmap 250 < overlay 350 <
+   markers 600. Markers, their popups and the status strip stay on top and
+   clickable, markers keep their current colors and direction rotors, and the
+   overlay must not capture clicks that today reach the map or a marker.
 4. **Styling.** HSL's own tram route rendering: a white casing polyline under
    HSL tram green `#00985F`, with the per-zoom widths stated in the code. A
    documented deviation is allowed if the casing proves too heavy under the
    markers at z11-13 — the deviation and its reason go where the widths live.
-   The overlay is always on: no toggle, no legend entry, no new UI control.
+   **Amended 2026-10-12 (user scope expansion):** the always-on clause is
+   superseded — the overlay gains a visibility toggle (requirement 9); the
+   no-legend-entry rule stands.
 5. **Added once, not per update.** The overlay is created when the geometry
    resolves and is not rebuilt by marker updates: no per-marker or per-position
    layer work, and the ~1 Hz marker refresh must not touch the polyline set.
@@ -72,6 +76,30 @@ lines 1-15 and the variants (`10B`, `10H`, `11H`, `13H`, `1H`, `1T`, `2H`,
    connection (ADR-0002/ADR-0004), the line-metadata query stays one fetch per
    session, marker counts, legend, snapshots, popup content and panel behavior
    are unchanged.
+9. **Visibility toggles (2026-10-12 user scope expansion).** Two round toggle
+   buttons sit in a vertical group directly above the status strip's collapsed
+   pill anchor (bottom-left; above the pill, i.e. higher `bottom`, same
+   `left`), each the same 2.5rem oval as the collapsed pill:
+   - one toggles the **punctuality heatmap** (TV-0028) on/off, default ON;
+     label `HM` with a colored indicator dot — green while on, gray while
+     off;
+   - one toggles the **tram line overlay** (this task) on/off, default ON;
+     label `TO` with the same green/gray indicator;
+   - `aria-pressed` carries the state and the accessible name spells it out
+     (e.g. "Toggle the punctuality heatmap, on"); keyboard operable; the
+     off state hides its layer (the heatmap stops rendering; the overlay's
+     pane is hidden — the geometry request policy is unchanged either way:
+     it is still one request per session, fired when the map page mounts
+     with a key, regardless of toggle state);
+   - toggling is a per-session state, nothing persisted (the app-wide
+     rule), and it must not alter stacking, z-indexes, or any other layer's
+     behavior;
+   - the markers are never toggleable — the tram positions are the app's
+     core read.
+   The heatmap's always-on decision (TV-0028) is superseded by this same
+   scope expansion; record the supersedence in PLAN.md and the ADR-0001
+   amendment gains one sentence: the overlay is always loaded but its
+   visibility is user-toggleable since 2026-10-12.
 
 ## Acceptance
 
@@ -84,6 +112,8 @@ lines 1-15 and the variants (`10B`, `10H`, `11H`, `13H`, `1H`, `1T`, `2H`,
    (state the actual route / pattern / coordinate counts and bytes, and compare
    them with the amendment's 31 / 150 / 25 319 / ~862 KB), and **zero** overlay
    requests from the vehicle page or the return trip. Report the raw log lines.
+   With the toggles (requirement 9): toggling either layer off and on issues
+   **no** new request of any kind (verified in the same log).
 3. **Objective geometry alignment.** For at least three named locations
    (Rautatientori, Katajanokka, Munkkiniemi, or better ones if these are
    ambiguous), compute the minimum distance from that stop's coordinates - taken
@@ -111,6 +141,11 @@ lines 1-15 and the variants (`10B`, `10H`, `11H`, `13H`, `1H`, `1T`, `2H`,
    map page's path (`src/map/**`) and not from `src/components/vehicle/**`, and
    that no second `routes(` query was added to the metadata loader's module
    state.
+8. **Toggle behavior (requirement 9).** Both toggles default ON on load; each
+   hides only its own layer (heatmap blobs vanish; overlay lines vanish);
+   the status strip, markers, popups and all stacking are unaffected; turning
+   both off leaves the basemap, markers and strip fully working. State is
+   per-session (reload resets to ON), nothing persisted.
 
 ## Notes
 
@@ -129,6 +164,17 @@ lines 1-15 and the variants (`10B`, `10H`, `11H`, `13H`, `1H`, `1T`, `2H`,
 - **Serialize with TV-0024.** Both tasks edit `src/lib/digitransit.ts`; TV-0024
   stays queued until this task is merged and reviewed, so the two never share a
   base.
+- **Scope expansion 2026-10-12 (user decision, coordinator-written):** the
+  toggles. The user named the design: round buttons matching the collapsed
+  pill's size (2.5rem ovals), vertically stacked above the pill at the strip's
+  bottom-left anchor, indicator dot green-on/gray-off, labels `HM` (heatmap,
+  TV-0028's layer) and `TO` (this task's overlay), both default ON, per-session
+  state. The heatmap's always-on decision (TV-0028) is superseded by the same
+  decision; ADR-0001's amendment gains one sentence. The implementation is in
+  the merged branch's coordinate space: the strip lives outside the map pane
+  (TV-0027), so the toggle group is a plain absolutely-positioned element in
+  MapPage above the strip anchor (higher `bottom`, same `left`, z-index
+  640 alongside the strip — above the map, below controls), not a pane.
 
 ## Handoff (status: REVIEW → DONE — optional, delete before merge)
 
