@@ -21,10 +21,20 @@
  * while some vehicle's route id does not resolve, and kept fresh on a
  * bounded cadence (see ensureLiveTripsIfNeeded below).
  *
+ * TV-0029: the hook opens a **second** subscription, the metro position
+ * stream (one more WebSocket, the task's request discipline), and both feeds
+ * merge into the one latest-position map and the one snapshot: metro
+ * vehicles carry `mode: "metro"` (trams "tram"), their route ids resolve
+ * through the same per-session route index (the index gained the metro
+ * routes in the same one request - digitransit.ts), and the live-trip match
+ * covers them identically because it is asked for the indexed routes'
+ * patterns' vehiclePositions. The next-stop precedence is inverted for
+ * metro (the topic level is the metro truth; tram keeps payload-first).
+ *
  * The stream and the snapshot tick both pause while the tab is hidden: the
- * MQTT subscription is closed, so a hidden tab generates no API traffic
- * (the API-load balance from ADR-0002), and resumes when the tab becomes
- * visible again.
+ * MQTT subscriptions (tram and metro alike) are closed, so a hidden tab
+ * generates no API traffic (the API-load balance from ADR-0002), and
+ * resumes when the tab becomes visible again.
  */
 import { useEffect, useRef, useState } from "react";
 import {
@@ -35,6 +45,7 @@ import {
   type TramPosition,
 } from "../lib/digitransit.ts";
 import {
+  subscribeMetroPositions,
   subscribeTramPositions,
   vehicleKey,
   type HfpVehiclePosition,
@@ -93,6 +104,7 @@ function positionsEqual(a: TramPosition[], b: TramPosition[]): boolean {
     if (
       x.operatorId !== y.operatorId ||
       x.vehicleNumber !== y.vehicleNumber ||
+      x.mode !== y.mode ||
       x.routeShortName !== y.routeShortName ||
       x.lat !== y.lat ||
       x.lon !== y.lon ||
@@ -114,6 +126,10 @@ export function useTramPositions(): TramPositionsState {
   const routeIndexRef = useRef<Map<string, string> | null>(null);
   const latestPositionsRef = useRef(new Map<string, HfpVehiclePosition>());
   const connectedRef = useRef(false);
+  /** TV-0029: the metro socket's connection state, kept beside the tram
+   * one. The snapshot's status decision reads both (live when either is
+   * connected); stop() resets it like the tram's. */
+  const metroLiveRef = useRef(false);
 
   // Tram line metadata comes from the keyed routing API; without a key the
   // app shows a clear error instead of silently hiding data.
@@ -143,7 +159,13 @@ export function useTramPositions(): TramPositionsState {
   useEffect(() => {
     if (!hasRouteIndex) return;
 
-    let stream: TramStreamHandle | null = null;
+    const streamState: {
+      tram: TramStreamHandle | null;
+      metro: TramStreamHandle | null;
+    } = {
+      tram: null,
+      metro: null,
+    };
     let snapshotTimer: number | null = null;
 
     /** TV-0022: the Routing API's live-trip match is the only other source of
@@ -212,24 +234,37 @@ export function useTramPositions(): TramPositionsState {
                   ? "open"
                   : "closed",
             headsign: latest.headsign,
-            // TV-0025: the payload's stop field wins when present; the
-            // topic's level-13 next-stop id fills the roughly half of vp
-            // messages that omit it (the two agreed in every sample).
+            // TV-0029: the next-stop precedence is per mode: tram prefers
+            // the payload's stop field (the two sources agreed in every
+            // sampled tram position); metro inverts it - the topic's
+            // level-13 id is the metro truth (measured 2026-10-12: present
+            // on 100% of metro vp topics, the payload stop is null in ~56%
+            // of messages, and the disagreements never resolved within a
+            // 60 s window - the topic level leads the payload by one stop
+            // event).
             nextStopId:
-              latest.stop !== null
-                ? String(latest.stop)
-                : (latest.topicNextStopId ?? null),
+              latest.mode === "metro"
+                ? (latest.topicNextStopId ??
+                  (latest.stop !== null ? String(latest.stop) : null))
+                : latest.stop !== null
+                  ? String(latest.stop)
+                  : (latest.topicNextStopId ?? null),
             scheduleDeviation: latest.dl,
+            mode: latest.mode,
           });
         }
         const connected = connectedRef.current;
-        // A dead stream with a known reason stays "error" durably; consumers
-        // switching on status alone still see the failure.
-        const status: TramPositionsStatus = connected
-          ? "live"
-          : prev.error !== null
-            ? "error"
-            : "connecting";
+        // TV-0029: metro's socket can be live while the tram's is not (the
+        // snapshot is genuinely live whenever either feed is): live when
+        // either socket reports connected, else the tram stream's error /
+        // connecting state as today. A metro-only outage never shows as an
+        // app error (its handler logs it only).
+        const status: TramPositionsStatus =
+          connected || metroLiveRef.current
+            ? "live"
+            : prev.error !== null
+              ? "error"
+              : "connecting";
         const error = connected ? null : prev.error;
         // Return prev unchanged when nothing visible changed, so the tick
         // does not re-render consumers on no-op snapshots (~150 vehicles
@@ -249,7 +284,7 @@ export function useTramPositions(): TramPositionsState {
     };
 
     const start = () => {
-      if (stream === null) {
+      if (streamState.tram === null) {
         // The client reports a socket error even when we closed it on purpose
         // (the broker's close frame races ours), so a stream we closed must not
         // log or show anything. The flag is scoped to this one stream, not to
@@ -273,7 +308,43 @@ export function useTramPositions(): TramPositionsState {
             setState((prev) => ({ ...prev, status: "error", error }));
           },
         });
-        stream = {
+        // TV-0029: the two streams' shared plumbing. Each handle owns its
+        // `closed` flag (the tram comment above still applies per stream: a
+        // flapping tab can close and replace one stream inside one effect
+        // run, and a late error from an old socket must not be reported as
+        // the new one's failure). Metro's connection state feeds the status
+        // decision (live when either socket is connected); a metro-only
+        // error is logged and never degrades the tram status - metro is an
+        // additive feed whose failure must not break the existing view.
+        streamState.tram = {
+          close: () => {
+            closed = true;
+            handle.close();
+          },
+        };
+      }
+      if (streamState.metro === null) {
+        // The same closed-flag scoping as the tram stream above, per stream.
+        let closed = false;
+        const handle = subscribeMetroPositions({
+          onPosition: (position) => {
+            latestPositionsRef.current.set(vehicleKey(position), position);
+          },
+          onConnectionChange: (connected) => {
+            // TV-0029: metro's connection state does not gate the tram
+            // status - the two sockets connect independently, and the
+            // snapshot's status decision below reads both.
+            metroLiveRef.current = connected;
+          },
+          onError: (error) => {
+            if (closed) return;
+            console.error(
+              "[tram-view] metro position stream error:",
+              error.message,
+            );
+          },
+        });
+        streamState.metro = {
           close: () => {
             closed = true;
             handle.close();
@@ -291,10 +362,15 @@ export function useTramPositions(): TramPositionsState {
         clearInterval(snapshotTimer);
         snapshotTimer = null;
       }
-      if (stream !== null) {
-        stream.close();
-        stream = null;
+      if (streamState.tram !== null) {
+        streamState.tram.close();
+        streamState.tram = null;
         connectedRef.current = false;
+      }
+      if (streamState.metro !== null) {
+        streamState.metro.close();
+        streamState.metro = null;
+        metroLiveRef.current = false;
       }
     };
 

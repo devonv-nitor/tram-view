@@ -1,6 +1,5 @@
-/**
- * Digitransit routing API GraphQL client: tram line metadata, API key
- * handling, and the tram-line short-name filter. Transport decision:
+/** The digitransit routing API GraphQL client: tram and metro line metadata,
+ * API key handling, and the line short-name filter. Transport decision:
  * Docs/ADR/0002-data-transport.md. The key is read from import.meta.env
  * (sourced from the untracked .env.local). TV-0018: the same key also
  * authenticates the map's basemap tile requests (Docs/ADR/0001-map-library.md
@@ -31,7 +30,7 @@ export class MissingApiKeyError extends Error {
   }
 }
 
-/** A tram position shown on the map (TV-0005 consumes this). `routeShortName`
+/** One tram position shown on the map (TV-0005 consumes this). `routeShortName`
  * is null when the vehicle's latest position resolves to no displayed GTFS
  * tram line - depot shunting, training/testing or an absent route (TV-0011
  * renders those vehicles out of service: red dot instead of a line number,
@@ -63,11 +62,19 @@ export interface TramPosition {
   /** Next-stop id from the HFP payload's `stop` field, else the HFP topic's
    * level-13 next-stop id (TV-0025; the payload wins when both are present,
    * and the two agreed in every sampled position, so this only widens
-   * coverage from the payload's ~49% to the topic's 100%). */
+   * coverage from the payload's ~49% to the topic's 100%). TV-0029: metro
+   * positions invert this precedence - the topic level wins (measured: it
+   * leads the payload by one stop event) - decided by `mode` below. */
   nextStopId: string | null;
   /** HFP schedule deviation in seconds: positive = ahead of timetable,
    * negative = behind (TV-0023). */
   scheduleDeviation: number | null;
+  /** TV-0029: which feed the vehicle came from - "tram" or "metro". Metro
+   * always carries scheduleDeviation null (the feed publishes no dl), so
+   * consumers that require a reported deviation need no extra check beyond
+   * their existing null handling; the field still lets the popup hide its
+   * deviation cell and the heatmap state its exclusion explicitly. */
+  mode: "tram" | "metro";
 }
 
 interface TramRoutesData {
@@ -197,7 +204,17 @@ async function buildTramRouteIndex(
   rawRouteListForDebug = rawRoutes;
   const index = new Map<string, string>();
   for (const route of data.routes) {
-    if (route.mode !== "TRAM" || route.shortName === null) continue;
+    // TV-0029: the metro routes ride the same per-session metadata response
+    // (the query carries no transportModes filter, so all modes already come
+    // back) - one request stays one request. Their short names (M1, M2 and
+    // the M1B/M2B short-turns) pass the same line-name filter, so the index
+    // admits them and the resolution order below applies unchanged.
+    if (
+      (route.mode !== "TRAM" && route.mode !== "SUBWAY") ||
+      route.shortName === null
+    ) {
+      continue;
+    }
     if (!isTramLineShortName(route.shortName)) continue;
     index.set(route.gtfsId, route.shortName);
   }
@@ -749,16 +766,19 @@ export function loadRouteStopNames(
  * the map page's own layer draws the whole network shape from it, and the
  * vehicle overview page (ADR-0004) initiates no overlay request. `geometry`
  * is the planned pattern shape as `[Coordinates] {lat, lon}` objects, not an
- * encoded polyline. The `transportModes: [TRAM]` filter is the scope filter:
+ * encoded polyline. The `transportModes` filter is the scope filter:
  * every returned pattern is drawn, with no deduplication into one geometry
  * per displayed short name and no simplification (the accepted decision) -
  * the app's `isTramLineShortName` display filter is deliberately not applied
  * here, and a returned short name outside the displayed set is reported to
- * the caller as-is rather than filtered away.
+ * the caller as-is rather than filtered away. TV-0029: the filter widened to
+ * [TRAM, SUBWAY] so the metro corridors ride the same one per-session
+ * request (no second geometry query) and draw in the same pane with the
+ * metro color (TramLineOverlay keys the color off the route's mode).
  */
 const TRAM_NETWORK_GEOMETRY_QUERY = `
   query TramNetworkGeometry {
-    routes(transportModes: [TRAM]) {
+    routes(transportModes: [TRAM, SUBWAY]) {
       gtfsId
       shortName
       patterns {
@@ -794,12 +814,17 @@ export interface TramRouteGeometry {
    * to filter the pattern set (the accepted "every pattern" decision). */
   shortName: string | null;
   patterns: TramPatternGeometry[];
+  /** TV-0029: the route's GTFS mode ("TRAM" or "SUBWAY"), the only signal
+   * the overlay needs to color a metro route with the metro line blue
+   * instead of the tram green. */
+  mode: string;
 }
 
 interface TramNetworkGeometryData {
   routes: {
     gtfsId: string;
     shortName: string | null;
+    mode: string;
     patterns: {
       directionId: number;
       geometry: { lat: number; lon: number }[] | null;
@@ -841,6 +866,7 @@ async function fetchTramNetworkGeometry(
   return data.routes.map((route) => ({
     gtfsId: route.gtfsId,
     shortName: route.shortName,
+    mode: route.mode,
     patterns: route.patterns.map((pattern) => ({
       directionId: pattern.directionId,
       coordinates: (pattern.geometry ?? []).filter(

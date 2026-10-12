@@ -1,6 +1,6 @@
 ---
 id: TV-0029
-status: READY
+status: REVIEW
 owner: agent
 gatekeeper: human
 required_approvals: []
@@ -217,3 +217,42 @@ unit; car count is a **static property of the class**, not feed data
 - Merge order: none required (this task and TV-0024 touch different
   areas of `digitransit.ts`; TV-0024 removes dead code, TV-0029 adds
   live code - if they collide in review, the coordinator serializes).
+
+## Handoff (2026-10-12, to REVIEW)
+
+- Branch tip at handoff: see the commit record (pushed to
+  `bb/worker-tv-0029-metro-support-thr_ee5b9d3bbffd4pWv`).
+- Checks: `npm run lint`, `npm run format:check`, `npm run build` all green;
+  `dist/` deleted after the build; `package.json` untouched.
+- Key findings and decisions the reviewer should read the code against:
+  1. The route-index query (`TRAM_ROUTES_QUERY`) carries **no**
+     `transportModes` filter - it already returns every mode - so the metro
+     routes (HSL:31M1/M2/M1B/M2B, shortNames M1/M2/M1B/M2B, verified against
+     the live API before coding) now enter the index through
+     `buildTramRouteIndex`'s admission filter (`TRAM` or `SUBWAY` + the
+     line-name filter), keeping the request profile at exactly one
+     metadata request per session.
+  2. `resolveLiveTramTrip` is **not mode-scoped**: its query asks for the
+     indexed routes' `patterns.vehiclePositions` only, so widening the index
+     to the metro routes extends the live-trip match to metro with no query
+     change - the metro vehicles resolve index-first, live-trip second, red
+     dot last, through the same mechanism.
+  3. The overlay geometry query was widened in place
+     (`transportModes: [TRAM, SUBWAY]`) - still one request per session; the
+     overlay draws metro patterns with `METRO_LINE_COLOR` (#0072bc) under the
+     shared white casing, keyed off `TramRouteGeometry.mode`.
+  4. The metro next-stop precedence inversion lives in the snapshot builder
+     (per-mode branch on `latest.mode`); the shared subscription helper in
+     hfp.ts tags each parsed position with its subscription's mode, so the
+     tram path's behavior is unchanged (payload-first).
+  5. Status logic: live when either socket is connected; a metro-only error
+     is logged, never shown as an app error.
+  6. The Deviation cell is omitted (not a dash) for metro popups; the Doors
+     cell spans the row. ETA renders the muted dash via the existing
+     scheduleDeviation-null path.
+  7. The vehicle overview is untouched (requirement 9): it keeps its
+     tram-filtered subscription and shows its empty state for a metro id.
+- Known limitations: none new beyond the task's stated ones (no metro ETA
+  numbers, overview tram-only).
+- Decision requested: none - no STOP-DECISION was needed; every change
+  followed the task's stated decisions and ADR amendments.

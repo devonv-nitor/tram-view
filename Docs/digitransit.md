@@ -12,6 +12,8 @@ polling) is recorded in
 | Map basemap (HSL's generic map style, no transit geometry) | Digitransit Map API raster tiles, `GET https://cdn.digitransit.fi/map/v3/hsl-map/{z}/{x}/{y}{r}.png?digitransit-subscription-key=<key>` (512 px tiles, CDN-cached 7 days; TV-0018) | required |
 | Tram line overlay (every pattern of every tram route, as map geometry) | Routing API v2 GraphQL, `POST https://api.digitransit.fi/routing/v2/hsl/gtfs/v1`, query `routes(transportModes: [TRAM]) { gtfsId shortName patterns { directionId geometry { lat lon } } }`, fetched once per session and cached; map page only, drawn above the basemap and below the markers (TV-0019) | required |
 | Tram vehicle positions (lat/lon, heading, speed, direction, route id, vehicle number) | HFP MQTT over WebSockets, `wss://mqtt.hsl.fi:443/`, topic `/hfp/v2/journey/ongoing/vp/tram/#` (push, ~1 update/s per vehicle) | not needed |
+| Metro train positions (same shape as trams, TV-0029) | same MQTT broker, topic `/hfp/v2/journey/ongoing/vp/metro/#` - one more WebSocket subscription, measured ~40 raw msg/s (trams: ~380-400) | not needed |
+| Metro line metadata (route id -> short name) and metro overlay geometry | no separate request: the tram line-metadata query carries no `transportModes` filter, so the metro routes ride the same response, and the overlay geometry query was widened to `transportModes: [TRAM, SUBWAY]` (TV-0029) - one request per session either way | required |
 | Tram line metadata (route id -> short name, mode) | Routing API v2 GraphQL, `POST https://api.digitransit.fi/routing/v2/hsl/gtfs/v1`, query `routes { gtfsId shortName mode }`, fetched once per session and cached | required |
 | One vehicle's full HFP event stream (position, stop events, doors, traffic-light priority) | same MQTT broker, filter `/hfp/v2/journey/ongoing/+/tram/<oper>/<veh>/#` - one vehicle, every event type (TV-0017) | not needed |
 | One line's stop sequences | Routing API v2 GraphQL, query `route(id: "HSL:<routeId>") { patterns { directionId headsign stops { gtfsId name lat lon } vehiclePositions { vehicleId trip { gtfsId stoptimes { scheduledArrival realtimeArrival stop { gtfsId } } } } } }`, once per route per session and cached; which pattern is shown is chosen per vehicle from the API's own live-trip match (TV-0017, TV-0020); TV-0025 adds each matched vehicle's trip and its stop times, which is the timetable the marker popup's ETA corrects by the reported deviation | required |
@@ -45,7 +47,81 @@ per 60 s, so a vehicle entering service can stay red for up to one refresh.
 Dedup stays latest-position-per-vehicle, so a vehicle that reports under both
 a service route and an out-of-service route shows whichever event arrived
 last, and vehicles that stop publishing still disappear after the staleness
-cutoff.
+cutoff. TV-0029: metro vehicles resolve through the same three steps - the
+index (which now admits the SUBWAY routes), the live-trip match (the same
+query, asked for the indexed routes' `vehiclePositions`), else red.
+
+## Metro trains on the map (TV-0029)
+
+Metro rides the **same MQTT broker** with the same topic shape at `mode` =
+`metro`: `/hfp/v2/journey/ongoing/vp/metro/<oper>/<veh>/<route>/<dir>/<headsign>/<start>/<nextstop>/<geohash...>`
+- 19 topic levels, identical structure to tram. The map page opens one more
+wildcard subscription (`/hfp/v2/journey/ongoing/vp/metro/#`, one more
+WebSocket; measured ~40 raw msg/s against trams' ~380-400, ~2.6k messages
+over 60 s on 2026-10-12). Facts measured against the live feed and the
+Routing API (2026-10-12), and what the app does with them:
+
+- **Identity and classes.** `oper` = 50 (HSL metro) always; vehicle numbers
+  101-325 in every sample. Rolling-stock classes from the vehicle number
+  (user-supplied ranges, corroborated live): M100 = 101-184, M200 = 201-224,
+  M300 = 301-325; anything else renders as an unknown metro type. M100/M200
+  are two-car sets, M300 four-car sets. The live window measured 18 M100,
+  4 M200, 13 M300, 0 outside the ranges (`src/lib/metro.ts`).
+- **One vehicle per trainset.** The coupled sets publish as **one** vehicle:
+  one topic, one identity, one position. The payload's `seq` is 1 in every
+  sample (a train-set id, not a car index) and no coupling data exists to
+  render.
+- **Routes.** `route` = `31M1` / `31M2` on the live feed (the short-turns
+  `31M1B`/`31M2B` exist in GTFS and resolve the same way: a vehicle
+  reporting `31M1B` renders as M1 with the short-turn's headsign); `desi` =
+  `M1`/`M2`. The metro routes resolve through the **same** per-session
+  route index the trams use - the tram metadata query has no
+  `transportModes` filter, so the SUBWAY routes were already in the
+  response; the index now admits `TRAM` and `SUBWAY` records whose short
+  name passes the line-name filter. One request per session, unchanged.
+- **Next stop, inverted precedence.** The topic's level-13 next-stop id is
+  present on 100% of metro vp topics, while the payload `stop` is null in
+  ~56% of messages; when both are present they agreed in 670/701 samples
+  and the mismatches never resolved within a 60 s window (the topic level
+  appears to lead the payload by one stop event). Metro therefore uses
+  topic-first/payload-fallback - the inverse of the tram rule
+  (`src/hooks/useTramPositions.ts`).
+- **The null fields.** `dl` is null in 100% of samples (metro publishes no
+  schedule deviation on this stream), `drst` null (metro door state is
+  unknown from this feed - the popup's Doors cell reads its muted dash),
+  `odo`/`acc` null, `occu` 0, `loc` `MAN`. The popup's Deviation cell is
+  **not rendered** for metro (a permanent dash would be dishonest) and the
+  ETA cell shows its muted dash - the timetable pipeline is reusable (the
+  live trips match works identically) but the metro timetable's stop-time
+  anchoring is not wired for metro in this task.
+- **`line` is noise.** A per-vehicle small integer (1-34), constant per
+  vehicle per day but unrelated to M1/M2 (veh 115 reports line 3 while
+  running 31M1). Not a metro line id; ignored like the tram side ignores
+  the tram's `line`.
+- **Markers, chips, heatmap, overlay.** Metro markers are the tram
+  teardrop in HSL metro blue (`#0072bc`, one hue for all classes; the
+  class/model line `M100 (Rotary DC) · 2 cars` etc. is the hover tooltip),
+  labeled with the resolved M1/M2, red dot when unresolved. The status
+  strip gains one always-on `●N Metro` chip; the tram chips count tram
+  positions only, and Not-in-service counts both modes' unresolved
+  vehicles, so the chips partition the snapshot. The punctuality heatmap
+  contributes nothing for metro (no `dl` - the explicit mode guard
+  documents it). The tram line overlay draws the metro corridors in the
+  same pane with the metro blue under the same white casing; the geometry
+  rides the same one per-session request, widened to
+  `transportModes: [TRAM, SUBWAY]`, and the same `TO` toggle hides all
+  route lines.
+- **The vehicle overview stays tram-only.** A metro vehicle's popup link
+  navigates to `#/vehicle/50/<veh>`, and the overview's vehicle-scoped
+  subscription is tram-filtered (`+/tram/`), which returns nothing for a
+  metro vehicle - the page shows its honest empty state. Extending the
+  overview to metro is out of scope for TV-0029 (a follow-up if wanted).
+- **No metro timetable events.** The stop events (`due`, `arr`, `dep`,
+  `pde`, `pas`) that carry tram timetable fields were never observed on the
+  metro topics in 45 s of observation (vp only, 1936 messages) - metro has
+  no timetable event stream on this MQTT feed, only the Routing API's
+  static timetable. If metro door state or capacity is wanted, the feed
+  does not expose it today.
 
 Special case (TV-0013): HSL car #175 - the SpåraKoff bar tram - is detected
 by identity, `operatorId === 40 && vehicleNumber === 175` on the latest
@@ -106,13 +182,15 @@ the map, above the attribution band, reports the state of the data client:
   currently in the snapshot (TV-0012), the Unknown type chip only while an
   unknown-numbered tram is in the snapshot (TV-0014 - never a zero-count
   row), a SpåraKoff chip only while car #175 is in the snapshot (TV-0013 -
-  never a zero-count row), and a red-dot chip for out-of-service trams
+  never a zero-count row), a Metro chip for the metro trains in the
+  snapshot (TV-0029 - always on, any class, one blue in the legend), and a
+  red-dot chip for out-of-service trams
   (TV-0011; TV-0027: the chip carries its live count - the out-of-service
   trams are excluded from the category chips, so the status line's total
   equals the sum of the category counts + the Not-in-service count + the
-  SpåraKoff count, 0 or 1). The chips show short labels (MLNRV, Artic, X54,
-  Unknown, SpåraKoff, Not in service); the full `fleet.ts` model name is
-  on each chip's `title` tooltip.
+  SpåraKoff count + the Metro count). The chips show short labels (MLNRV,
+  Artic, X54, Metro, Unknown, SpåraKoff, Not in service); the full
+  `fleet.ts` model name is on each tram chip's `title` tooltip.
 
 TV-0027: the strip is z-index 640 - above the map pane's tier in the root
 stacking context (.leaflet-map-pane carries a transform, so it is its own

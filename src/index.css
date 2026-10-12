@@ -32,6 +32,13 @@
      hue; like the brand A/B/C bodies it is light enough that the label ink
      switches to dark (contrast below). */
   --tram-type-sparakoff: #eb4f49;
+  /* Metro train body (TV-0029): HSL metro line blue, one hue for every
+     metro class (the classes are distinguishable by tooltip/vehicle number,
+     not by color). Fixed like the tram marker colors: the basemap under the
+     markers is always light. Shared with the overlay's metro corridor color
+     (src/map/constants.ts's METRO_LINE_COLOR is the same value by design;
+     the marker's copy lives here next to the other marker colors). */
+  --tram-type-metro: #0072bc;
 }
 
 * {
@@ -307,6 +314,12 @@ body {
   border-color: #fff;
 }
 
+/* Metro chip (TV-0029): the same metro blue as the marker body and the
+   overlay's metro corridor (the one blue shared by all three classes). */
+.debug-panel__chip--metro .debug-panel__chip-swatch {
+  background: var(--tram-type-metro);
+}
+
 .debug-panel__chip-count {
   font-weight: 600;
   font-variant-numeric: tabular-nums;
@@ -563,6 +576,16 @@ body {
   background: var(--tram-type-sparakoff);
 }
 
+/* Metro train (TV-0029): one blue body for every metro class (requirement 3:
+   the classes are distinguishable by tooltip/vehicle number, not by color -
+   three shades would be indistinguishable at marker scale). The teardrop
+   geometry, rotation and offline dot are the tram marker's own rules, so a
+   metro marker differs only in its body color. The body is darker than the
+   tram brand hues, so the white label ink meets contrast on it. */
+.tram-marker--metro .tram-marker__shape {
+  background: var(--tram-type-metro);
+}
+
 /* Not-in-service dot (TV-0011): replaces the line label on an out-of-service
    marker (routeShortName null). Both children of .tram-marker are positioned;
    the dot sits centered under the label span and paints above the rotor's
@@ -729,6 +752,14 @@ body {
   padding: 0.45rem 0.6rem;
   border-radius: 8px;
   background: #1a1d23;
+}
+
+/* TV-0029: a metro popup's row 2 carries one cell (Doors) - the Deviation
+   cell is not rendered (metro publishes no dl) - so the cell spans the row:
+   flex: 1 already stretches it, and this class documents the solo state.
+   The visual result is identical to the tram rows' wider cell. */
+.tram-hud-popup__metric--solo {
+  flex: 1;
 }
 
 .tram-hud-popup__metric-label {

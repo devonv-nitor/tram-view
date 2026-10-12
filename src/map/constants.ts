@@ -66,7 +66,9 @@ export function mapTileUrl(subscriptionKey: string): string {
  * (600), so the overlay draws above the basemap and below the tram markers;
  * the pane is non-interactive, so markers, popups and the status panel stay
  * on top and clickable. `createPane("tramLineOverlay")` gives the div the
- * class `leaflet-tramLineOverlay-pane`.
+ * class `leaflet-tramLineOverlay-pane`. TV-0029: the same pane carries the
+ * metro corridor geometry - one toggle (the `TO` button) for all route
+ * lines, tram and metro alike.
  */
 export const TRAM_OVERLAY_PANE = "tramLineOverlay";
 export const TRAM_OVERLAY_PANE_Z_INDEX = 350;
@@ -74,6 +76,13 @@ export const TRAM_OVERLAY_PANE_Z_INDEX = 350;
 /** HSL tram green, the color HSL's own products render tram routes with
  * (ADR-0001 overlay amendment). */
 export const TRAM_LINE_COLOR = "#00985F";
+
+/** TV-0029: the metro line overlay color - HSL metro line blue, the hue
+ * HSL's own products render metro routes with (the user-supplied
+ * `#0072bc`). It must read against the same light basemap the tram green
+ * does, and stay distinct from it where the corridors cross. Fixed like the
+ * tram color (the basemap is always light). */
+export const METRO_LINE_COLOR = "#0072bc";
 
 /** The casing color under the green line. Leaflet has no casing option, so
  * HSL's tram rendering (a wider white polyline under a narrower green one)

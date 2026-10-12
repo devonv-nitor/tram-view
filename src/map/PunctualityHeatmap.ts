@@ -21,6 +21,10 @@
  * not the SpåraKoff bar tram (a tourist cruise with no timetable —
  * isSparakoffBarTram, src/lib/fleet.ts), and |dl| <= MAX_CONTRIBUTING_DL_S.
  * Values beyond the clamp are excluded entirely, not clamped into the scale.
+ * TV-0029: metro positions contribute nothing. Metro publishes no `dl` on
+ * this stream (null in 100% of measured samples), so the null check already
+ * excludes every metro vehicle; the explicit mode guard below documents that
+ * intent so the exclusion is stated rather than implicit.
  *
  * Rendering: one Leaflet pane at z 250 (above the basemap, below TV-0019's
  * route overlay tier and the markers — the pane order across tasks is
@@ -225,6 +229,11 @@ export class PunctualityHeatmapLayer {
 
     for (const position of positions) {
       const dl = position.scheduleDeviation;
+      // TV-0029: metro contributes nothing to the punctuality field - metro
+      // publishes no dl (null in 100% of measured samples), so the null
+      // check below already excludes it; this explicit guard documents that
+      // intent (see Docs/digitransit.md's metro section).
+      if (position.mode === "metro") continue;
       if (dl === null) continue;
       if (isSparakoffBarTram(position)) continue;
       const absDl = Math.abs(dl);

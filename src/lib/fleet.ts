@@ -1,6 +1,7 @@
 /**
  * HSL rolling stock categories (TV-0009): which tram type a vehicle number
- * belongs to, and its advertised model name.
+ * belongs to, and its advertised model name. Tram-only by design - the metro
+ * classes live in the sibling src/lib/metro.ts (TV-0029).
  *
  * Category source, live-verified (decision in Docs/ADR/0002-data-transport.md,
  * evidence in the TV-0009 commit record): neither the HFP VP payload (no

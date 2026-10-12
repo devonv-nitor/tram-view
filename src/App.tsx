@@ -10,10 +10,11 @@ import {
 } from "./components/vehicle/VehicleOverview";
 
 /**
- * The map page. It owns the live-data client (one MQTT subscription, one
- * metadata query) shared by the map markers and the status panel, and it is
+ * The map page. It owns the live-data clients (one MQTT subscription per
+ * transport mode - tram and, since TV-0029, metro - and one metadata query)
+ * shared by the map markers and the status panel, and it is
  * mounted only when the route is the map: mounting it while the vehicle
- * overview is shown would open the network-wide position stream next to the
+ * overview is shown would open the network-wide position streams next to the
  * overview's vehicle-scoped one, which ADR-0004 forbids.
  * TV-0019 requirement 9: it also owns the layer-visibility toggles'
  * per-session state - the buttons live in MapLayerToggles, the layers in

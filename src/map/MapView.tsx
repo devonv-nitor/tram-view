@@ -28,7 +28,10 @@ import {
  * as their own panes. TV-0019 requirement 9: the overlay's and the
  * heatmap's visibility are user-toggled (MapPage owns the per-session
  * state; MapLayerToggles renders the buttons) and reach the imperative
- * layers through the `layerOn` props and these effects.
+ * layers through the `layerOn` props and these effects. TV-0029: the
+ * position snapshot this view renders carries tram and metro positions
+ * alike (the metro markers draw in the same marker layer); the overlay
+ * draws the metro corridors too, in the same pane.
  */
 export default function MapView({
   positions,
