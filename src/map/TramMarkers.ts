@@ -119,8 +119,8 @@ function markerLabel(position: TramPosition): string {
  * already validated by isTramLineShortName (digits 1-15 with an optional
  * trailing letter, or a single letter), so they are safe as icon HTML.
  * TV-0029: a metro label is the index-resolved M1/M2, validated by its own
- * predicate (isMetroLineShortName: a leading "M" then digits with an
- * optional trailing letter) - equally safe as icon HTML.
+ * predicate (isMetroLineShortName: exactly M1, M2, M1B or M2B) - equally safe
+ * as icon HTML.
  * An out-of-service vehicle (routeShortName null, TV-0011) keeps the
  * category-colored body and heading rotation and swaps the line label for
  * the red not-in-service dot (CSS: .tram-marker--offline); the label span

@@ -235,13 +235,16 @@ export function isTramLineShortName(shortName: string): boolean {
   return TRAM_LINE_SHORT_NAME.test(shortName.trim().toUpperCase());
 }
 
-/** TV-0029: metro lines Tram View displays: `M` + digits (M1, M2) with an
- * optional trailing letter (the M1B/M2B short-turns). Case-insensitive. The
- * real short names measured live on 2026-10-12: M1, M2, M1B, M2B. */
-const METRO_LINE_SHORT_NAME = /^M[0-9]+[A-Z]?$/;
+/** TV-0029: metro lines Tram View displays - exactly the four short names
+ * HSL's metro publishes: M1, M2 and the M1B/M2B short-turns (measured live on
+ * 2026-10-12; the GTFS routes return these and no others). An exact set, not
+ * a pattern: a looser shape (M + digits + optional letter) would admit short
+ * names no metro line has - M3/M10 or a hypothetical M1A/M2C - and index a
+ * route the live feed can never produce. Case-insensitive. */
+const METRO_LINE_SHORT_NAMES = new Set(["M1", "M2", "M1B", "M2B"]);
 
 export function isMetroLineShortName(shortName: string): boolean {
-  return METRO_LINE_SHORT_NAME.test(shortName.trim().toUpperCase());
+  return METRO_LINE_SHORT_NAMES.has(shortName.trim().toUpperCase());
 }
 
 /** The index's per-mode line-name filter (TV-0029): a TRAM route must pass

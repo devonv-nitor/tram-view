@@ -255,6 +255,29 @@ unit; car count is a **static property of the class**, not feed data
   `bb/worker-tv-0029-metro-support-thr_ee5b9d3bbffd4pWv`).
 - Checks: `npm run lint`, `npm run format:check`, `npm run build` all green;
   `dist/` deleted after the build; `package.json` untouched.
+- **Review round 2 (2026-10-12), three blocking findings fixed in one
+  follow-up commit:**
+  1. `isMetroLineShortName` is now an exact set lookup - the four measured
+     short names M1, M2, M1B, M2B (the GTFS routes return these and no
+     others) - not the `M` + digits + optional-letter pattern, which would
+     have admitted short names no metro line has (M3, M10, a hypothetical
+     M1A/M2C). The shape-based description in Docs/digitransit.md and
+     TramMarkers.ts's comment now say the four names.
+  2. The stream error records are per stream (tramErrorRef/metroErrorRef
+     plus lastErroredStreamRef picking which record the "neither connected"
+     error state shows): set by that stream's onError, cleared only by that
+     same stream's next connection-change to connected or by teardown -
+     never by the other stream's connection state, never by the snapshot
+     tick. The combined derivation (applyConnectionStatus + takeSnapshot)
+     only consults the records, so a partial outage that ends with the
+     remaining socket dropping without a new error still shows the recorded
+     error, not a blind "connecting". The immediate-on-error application
+     (mqtt fires onError before close) and the tram-only collapse are
+     unchanged; the state's displayed error stays null while either socket
+     is connected.
+  3. The obsolete `#0072bc` literal is gone from src/index.css's ink
+     comment - it now says the original blue is superseded to the metro
+     orange without carrying the dead hex.
 - Key findings and decisions the reviewer should read the code against:
   1. The route-index query (`TRAM_ROUTES_QUERY`) carries **no**
      `transportModes` filter - it already returns every mode - so the metro

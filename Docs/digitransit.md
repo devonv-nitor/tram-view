@@ -85,8 +85,8 @@ Routing API (2026-10-12), and what the app does with them:
   `transportModes` filter, so the SUBWAY routes were already in the
   response; the index admits `TRAM` and `SUBWAY` records whose short name
   passes that mode's line filter (`isTramLineShortName` for tram lines,
-  `isMetroLineShortName` - `M` + digits + optional trailing letter - for
-  metro). One request per session, unchanged.
+  `isMetroLineShortName` - exactly the four measured names M1, M2, M1B and
+  M2B - for metro). One request per session, unchanged.
 - **Next stop, inverted precedence.** The topic's level-13 next-stop id is
   present on 100% of metro vp topics, while the payload `stop` is null in
   ~56% of messages; when both are present they agreed in 670/701 samples
