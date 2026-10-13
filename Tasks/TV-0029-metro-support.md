@@ -93,10 +93,11 @@ unit; car count is a **static property of the class**, not feed data
 1. **One more subscription.** The map page opens a second HFP subscription
    on `/hfp/v2/journey/ongoing/vp/metro/#` alongside the tram one - the
    same `subscribeMqtt` client, one more WebSocket connection (measured
-   combined: still tiny vs the tram stream). The vehicle overview keeps
-   its own tram-only scoped filter; a metro vehicle's overview is out of
-   scope for this task (the popup link can still navigate, the overview
-   just keeps working as a tram overview - see requirement 9).
+   combined: still tiny vs the tram stream). The vehicle overview's scoped
+   filter is **mode-aware since 2026-10-13 (user scope expansion)**: a
+   metro vehicle's overview subscribes under `metro` (the operator decides,
+   `vehicleTopicFilter`) and receives its vp stream like a tram's - see
+   requirement 9 as amended.
 2. **One snapshot, two modes.** `useTramPositions` (or a sibling hook)
    extends the snapshot with metro positions: same `TramPosition` shape
    plus a `mode: "tram" | "metro"` field (new; trams default to "tram").
@@ -131,6 +132,10 @@ unit; car count is a **static property of the class**, not feed data
    the metro color is HSL's official metro orange, `#F15F22` - one hue for
    all three classes (the class distinction stays the tooltip, not the
    color); the blue above is the superseded original.
+   **Amended 2026-10-13 (user decision):** the metro marker's label ink is
+   **white** - the user's explicit choice, acknowledged as below the WCAG
+   4.5:1 threshold (3.3:1 measured) and accepted for these labels; the
+   tram markers keep the dark ink.
 4. **Popup.** The HUD popup gains no new cells beyond what the data
    carries: speed, next stop (topic level, inverted precedence for
    metro), headsign, line badge (M1/M2). ETA cell: **dash for metro** in
@@ -182,13 +187,21 @@ unit; car count is a **static property of the class**, not feed data
    in a new `src/lib/metro.ts` (or fleet.ts extended - pick per repo
    convention; fleet.ts is tram-specific today, so a sibling module
    matches).
-9. **Vehicle overview.** The overview page stays tram-only: a metro
-   vehicle's popup link navigates to `#/vehicle/50/<veh>`, and the
-   overview's scoped subscription is tram-filtered - which returns
-   nothing for a metro vehicle. This task makes the overview show its
-   honest empty state for metro (the tram-scoped stream simply has no
-   data); **extending the overview to metro is explicitly out of scope**
-   (a follow-up if the user wants it).
+9. **Vehicle overview. Amended 2026-10-13 (user scope expansion, twice):
+   the overview serves metro.** Originally tram-only with an honest empty
+   state for a metro id; the user then had the scope changed - the
+   overview's scoped subscription is mode-aware (operator 50 subscribes
+   under `metro`), so a metro vehicle receives its vp stream and the
+   overview renders it like a tram's. The metro-specific honesty rules:
+   the hero shows the metro class (`metroClassTooltip`: M100/M200/M300
+   with model family and car count) and the orange `badge--metro` instead
+   of the tram category (a metro number must never claim a tram model);
+   and the dl/Doors/TLP surfaces (the Schedule-deviation answer row, the
+   DeltaChart, the Schedule-deviation telemetry metric, the Doors card,
+   the TLP card) are hidden for metro (user 2026-10-13) - the feed
+   publishes none of that, so their dashes/empty states would imply data
+   that does not exist. The tram rendering is unchanged in every one of
+   these paths.
 10. **Docs.** `Docs/digitransit.md` gains the metro section: the topic
     shape, the field facts (dl/drst null, occu 0, seq always 1, `line`
     is noise), the next-stop precedence inversion, the class ranges, the
@@ -313,9 +326,13 @@ unit; car count is a **static property of the class**, not feed data
   6. The Deviation cell is omitted (not a dash) for metro popups; the Doors
      cell spans the row. ETA renders the muted dash via the existing
      scheduleDeviation-null path.
-  7. The vehicle overview is untouched (requirement 9): it keeps its
-     tram-filtered subscription and shows its empty state for a metro id.
-- Known limitations: none new beyond the task's stated ones (no metro ETA
-  numbers, overview tram-only).
+  7. The vehicle overview serves metro as amended 2026-10-13 (mode-aware
+     filter; the hero's metro class + orange badge; the dl/Doors/TLP
+     surfaces hidden for metro; tram rendering unchanged). The original
+     tram-only scope line above is superseded.
+- Known limitations: no metro ETA numbers (the honest dash; the timetable
+  pipeline is reusable but its stop-time anchoring deserves the TV-0026
+  treatment before it prints numbers); the metro overview's dl/Doors/TLP
+  cards are hidden, not dashed.
 - Decision requested: none - no STOP-DECISION was needed; every change
   followed the task's stated decisions and ADR amendments.

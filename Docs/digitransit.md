@@ -110,8 +110,11 @@ Routing API (2026-10-12), and what the app does with them:
   teardrop in HSL's official metro orange (`#F15F22`, user decision
   2026-10-12, superseding the task's original blue; one hue for all
   classes - the class/model line `M100 (Rotary DC) · 2 cars` etc. is the
-  hover tooltip), labeled with the resolved M1/M2, red dot when unresolved
-  or of an unknown class. The status strip gains one always-on `●N Metro`
+  hover tooltip) with **white label ink** (user 2026-10-13: explicitly
+  accepted below the WCAG 4.5:1 threshold, 3.3:1 measured; the tram
+  markers keep the dark ink), labeled with the resolved M1/M2, red dot
+  when unresolved or of an unknown class. The status strip gains one
+  always-on `●N Metro`
   chip (resolved metro with a known class); the tram chips count tram
   positions only, and Not-in-service counts every red-dot vehicle of both
   modes (unresolved routes, plus metro of unknown class), so the chips
@@ -121,11 +124,23 @@ Routing API (2026-10-12), and what the app does with them:
   under the same white casing; the geometry rides the same one per-session
   request, widened to `transportModes: [TRAM, SUBWAY]`, and the same `TO`
   toggle hides all route lines.
-- **The vehicle overview stays tram-only.** A metro vehicle's popup link
-  navigates to `#/vehicle/50/<veh>`, and the overview's vehicle-scoped
-  subscription is tram-filtered (`+/tram/`), which returns nothing for a
-  metro vehicle - the page shows its honest empty state. Extending the
-  overview to metro is out of scope for TV-0029 (a follow-up if wanted).
+- **The vehicle overview serves metro too (amended 2026-10-13, user
+  scope expansion - superseding the original tram-only scope).** A metro
+  vehicle's popup link navigates to `#/vehicle/50/<veh>`, and the
+  overview's vehicle-scoped subscription is mode-aware: operator 50
+  subscribes under `metro` (`vehicleTopicFilter` picks the mode), so the
+  page receives the vehicle's `vp` stream and renders it like a tram's.
+  The metro-specific honesty: the hero shows the metro class
+  (`M100 (Rotary DC) · 2 cars` style) and the orange badge instead of the
+  tram category (a metro number must never claim a tram model), and the
+  Schedule-deviation answer row, the deviation history chart, the
+  Schedule-deviation telemetry metric and the Doors and
+  traffic-light-priority cards are **hidden for metro** (user 2026-10-13)
+  - the feed publishes none of that, so their dashes or empty states
+  would imply data that does not exist. The tram rendering is unchanged
+  in every one of these paths. The cards the metro feed does populate
+  (speed, heading, position, journey) render as on the tram page, with
+  the grid's dashes (`dl`, `odo`, `acc`) staying honest dashes.
 - **No metro timetable events.** The stop events (`due`, `arr`, `dep`,
   `pde`, `pas`) that carry tram timetable fields were never observed on the
   metro topics in 45 s of observation (vp only, 1936 messages) - metro has
