@@ -55,10 +55,11 @@ import {
 } from "../lib/journey.ts";
 import {
   isSparakoffBarTram,
+  isVehicleOutOfService,
   SPARAKOFF_MARKER_LETTER,
   tramCategoryInfo,
-  type TramCategoryInfo,
 } from "../lib/fleet.ts";
+import { metroClassTooltip } from "../lib/metro.ts";
 import { vehicleKey } from "../lib/hfp.ts";
 import { buildTramPopupHtml } from "./TramMarkerPopup.ts";
 
@@ -83,16 +84,23 @@ function normalizeHeading(heading: number | null): number | null {
 
 /** Body-color class slug for one vehicle: the SpåraKoff special case
  * (TV-0013) wins over the TV-0009 category for car #175 only; every other
- * number keeps its plain CATEGORY_RANGES lookup. */
-function markerSlug(position: TramPosition, info: TramCategoryInfo): string {
+ * number keeps its plain CATEGORY_RANGES lookup. TV-0029: a metro vehicle
+ * (operator 50) uses its own modifier class - the metro body is one orange
+ * for every class (requirement 3), so no per-class metro color class
+ * exists; the tram category classes are untouched and a metro position can
+ * never fall into them (the mode check is first and tram-only below it). */
+function markerSlug(position: TramPosition): string {
+  if (position.mode === "metro") return "metro";
   return isSparakoffBarTram(position)
     ? "sparakoff"
-    : info.category.toLowerCase();
+    : tramCategoryInfo(position.vehicleNumber).category.toLowerCase();
 }
 
 /** Line-number text for one vehicle's label: the SpåraKoff letter (TV-0013)
  * in place of the line number, unconditionally - also when the route resolves
- * to no line, where every other vehicle shows the TV-0011 red dot. */
+ * to no line, where every other vehicle shows the TV-0011 red dot. A metro
+ * vehicle's label is the resolved short name ("M1"/"M2"); null renders the
+ * same red-dot offline state as trams. */
 function markerLabel(position: TramPosition): string {
   return isSparakoffBarTram(position)
     ? SPARAKOFF_MARKER_LETTER
@@ -110,6 +118,9 @@ function markerLabel(position: TramPosition): string {
  * leaving the plain TV-0005 circle. Labels are tram line short names
  * already validated by isTramLineShortName (digits 1-15 with an optional
  * trailing letter, or a single letter), so they are safe as icon HTML.
+ * TV-0029: a metro label is the index-resolved M1/M2, validated by its own
+ * predicate (isMetroLineShortName: exactly M1, M2, M1B or M2B) - equally safe
+ * as icon HTML.
  * An out-of-service vehicle (routeShortName null, TV-0011) keeps the
  * category-colored body and heading rotation and swaps the line label for
  * the red not-in-service dot (CSS: .tram-marker--offline); the label span
@@ -120,16 +131,17 @@ function markerLabel(position: TramPosition): string {
  * marker CSS re-enables pointer events that Leaflet disables for
  * non-interactive icons (src/index.css), and it stays out of the a11y
  * tree. */
-function createTramIcon(
-  position: TramPosition,
-  info: TramCategoryInfo,
-): L.DivIcon {
+function createTramIcon(position: TramPosition): L.DivIcon {
   const headingless = position.heading === null;
   // TV-0013: the SpåraKoff bar tram always shows its own letter and color -
   // never the TV-0011 red dot, even when its route resolves to no line.
-  const barTram = isSparakoffBarTram(position);
-  const offline = position.routeShortName === null && !barTram;
-  const className = `tram-marker tram-marker--${markerSlug(position, info)}${headingless ? " tram-marker--headingless" : ""}${offline ? " tram-marker--offline" : ""}`;
+  // TV-0029: the one out-of-service rule (isVehicleOutOfService) decides the
+  // dot for both modes: an unresolved route (tram TV-0011; metro the same)
+  // and - metro only - an unknown-class vehicle outside every mapped range
+  // (requirement 8; tram unknown types keep their gray UNKNOWN body without
+  // the dot, TV-0009, unchanged).
+  const offline = isVehicleOutOfService(position);
+  const className = `tram-marker tram-marker--${markerSlug(position)}${headingless ? " tram-marker--headingless" : ""}${offline ? " tram-marker--offline" : ""}`;
   const rotation = headingless
     ? ""
     : ` style="transform: rotate(${normalizeHeading(position.heading)}deg)"`;
@@ -147,8 +159,20 @@ function createTramIcon(
  * "not in service" hint and keep the model name. No tooltip carries the
  * internal category letter (TV-0014) - including the SpåraKoff bar tram
  * (TV-0013), identified by name with the same line prefix; the ranges'
- * category A it does not belong to is an internal detail. */
-function tooltipText(position: TramPosition, info: TramCategoryInfo): string {
+ * category A it does not belong to is an internal detail.
+ * TV-0029: a metro vehicle's tooltip is the class/model line - the tram
+ * tooltips are unchanged. */
+function tooltipText(position: TramPosition): string {
+  // TV-0029: a metro vehicle's tooltip is the class/model line - the tram
+  // tooltips are unchanged. The "Not in service" prefix follows the same
+  // rule the red dot renders from (isVehicleOutOfService): an unresolved
+  // route, or - metro only - an unknown class (requirement 8).
+  if (position.mode === "metro") {
+    const line = isVehicleOutOfService(position)
+      ? "Not in service"
+      : `Line ${position.routeShortName}`;
+    return `${line} — ${metroClassTooltip(position.vehicleNumber)}`;
+  }
   if (isSparakoffBarTram(position)) {
     const line =
       position.routeShortName === null
@@ -156,6 +180,7 @@ function tooltipText(position: TramPosition, info: TramCategoryInfo): string {
         : `Line ${position.routeShortName}`;
     return `${line} — SpåraKoff (bar tram)`;
   }
+  const info = tramCategoryInfo(position.vehicleNumber);
   const line =
     position.routeShortName === null
       ? "Not in service"
@@ -206,12 +231,12 @@ export class TramMarkerLayer {
       present.add(key);
       const marker = this.markers.get(key);
       if (marker === undefined) {
-        const info = tramCategoryInfo(position.vehicleNumber);
         const created = L.marker([position.lat, position.lon], {
-          icon: createTramIcon(position, info),
+          icon: createTramIcon(position),
           // TV-0009: full model name per vehicle, one hover away; Leaflet
-          // applies it to the icon element as the native tooltip.
-          title: tooltipText(position, info),
+          // applies it to the icon element as the native tooltip. TV-0029:
+          // metro vehicles carry their class/model line instead.
+          title: tooltipText(position),
           // Display-only markers; panning and zooming stay with the map.
           interactive: false,
           keyboard: false,
@@ -464,9 +489,10 @@ export class TramMarkerLayer {
     // one class toggle: the label span and the red dot swap visibility in
     // CSS, so no element is created or removed on a flicker. TV-0013: the
     // SpåraKoff bar tram never flips - it shows its letter, not the dot,
-    // even when the route resolves to no line.
-    const offline =
-      position.routeShortName === null && !isSparakoffBarTram(position);
+    // even when the route resolves to no line. TV-0029: the metro rule rides
+    // the same one predicate (an unresolved metro route, and a metro vehicle
+    // of unknown class, both show the dot; tram behavior unchanged).
+    const offline = isVehicleOutOfService(position);
     if (element.classList.contains("tram-marker--offline") !== offline) {
       element.classList.toggle("tram-marker--offline", offline);
     }
@@ -477,21 +503,28 @@ export class TramMarkerLayer {
     }
   }
 
-  /** Keeps the marker's body-color class (TV-0009, TV-0013) and the `title`
-   * tooltip in sync with the vehicle's current state. The category and the
-   * SpåraKoff identity both derive from the vehicle's oper+veh identity,
-   * which is part of the marker key and so never changes for an existing
-   * marker - the class effectively settles at creation - but both writes
-   * compare first and stay correct if the key or the mapping ever changes. */
+  /** Keeps the marker's body-color class (TV-0009, TV-0013, TV-0029) and
+   * the `title` tooltip in sync with the vehicle's current state. The
+   * category, the SpåraKoff identity and the metro mode all derive from the
+   * vehicle's oper+veh identity (metro: operator 50), which is part of the
+   * marker key and so never changes for an existing marker - the class
+   * effectively settles at creation - but both writes compare first and
+   * stay correct if the key or the mapping ever changes. */
   private syncCategory(element: HTMLElement, position: TramPosition): void {
-    const info = tramCategoryInfo(position.vehicleNumber);
-    const slug = markerSlug(position, info);
+    const slug = markerSlug(position);
     if (!element.classList.contains(`tram-marker--${slug}`)) {
-      for (const category of ["a", "b", "c", "unknown", "sparakoff"] as const) {
+      for (const category of [
+        "a",
+        "b",
+        "c",
+        "unknown",
+        "sparakoff",
+        "metro",
+      ] as const) {
         element.classList.toggle(`tram-marker--${category}`, category === slug);
       }
     }
-    const title = tooltipText(position, info);
+    const title = tooltipText(position);
     if (element.title !== title) {
       element.title = title;
     }

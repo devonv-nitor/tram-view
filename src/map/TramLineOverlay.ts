@@ -38,6 +38,7 @@ import {
   type TramRouteGeometry,
 } from "../lib/digitransit.ts";
 import {
+  METRO_LINE_COLOR,
   TRAM_LINE_CASING_COLOR,
   TRAM_LINE_COLOR,
   TRAM_OVERLAY_PANE,
@@ -48,6 +49,7 @@ import {
 export class TramLineOverlay {
   private readonly casingPolylines: L.Polyline[] = [];
   private readonly greenPolylines: L.Polyline[] = [];
+  private readonly metroPolylines: L.Polyline[] = [];
   private disposed = false;
 
   constructor(private readonly map: L.Map) {
@@ -84,23 +86,31 @@ export class TramLineOverlay {
   }
 
   /** Draws every returned pattern in two passes: first every casing
-   * polyline over all routes/patterns, then every green polyline, so the
-   * green lines sit above every casing within the pane - Leaflet's SVG
+   * polyline over all routes/patterns, then every colored polyline, so the
+   * colored lines sit above every casing within the pane - Leaflet's SVG
    * renderer paints later-inserted paths over earlier ones and does not
    * reorder, so interleaving per pattern would let a later pattern's white
-   * casing cover an earlier pattern's green line wherever the two overlap.
+   * casing cover an earlier pattern's colored line wherever the two overlap.
    * One polyline per (route, directionId) pattern, every coordinate the API
    * reports, nothing simplified; a pattern with no coordinates draws
    * nothing (there is nothing to drop). A fresh options object per polyline:
    * Leaflet's setStyle merges into `layer.options` on first style change, so
-   * no shared object is ever mutated across polylines. */
+   * no shared object is ever mutated across polylines.
+   * TV-0029: the metro routes (SUBWAY, the query's widened scope) draw in
+   * the same pane with the metro line orange under the same white casing -
+   * the casing list is shared, so a metro casing sits under every colored
+   * line exactly as a tram casing does; the colored lists are per mode so
+   * zoom-end re-styles each at its own width (the same width table, so the
+   * metro corridor reads at the same weight as the tram network). */
   private draw(routes: TramRouteGeometry[]): void {
     const width = tramLineWidths(this.map.getZoom());
-    const latlngs: [number, number][][] = [];
+    const tram: [number, number][][] = [];
+    const metro: [number, number][][] = [];
     for (const route of routes) {
+      const target = route.mode === "SUBWAY" ? metro : tram;
       for (const pattern of route.patterns) {
         if (pattern.coordinates.length === 0) continue;
-        latlngs.push(
+        target.push(
           pattern.coordinates.map(
             (coordinate) =>
               [coordinate.lat, coordinate.lon] as [number, number],
@@ -108,7 +118,7 @@ export class TramLineOverlay {
         );
       }
     }
-    for (const points of latlngs) {
+    for (const points of [...tram, ...metro]) {
       this.casingPolylines.push(
         L.polyline(points, {
           pane: TRAM_OVERLAY_PANE,
@@ -118,12 +128,22 @@ export class TramLineOverlay {
         }).addTo(this.map),
       );
     }
-    for (const points of latlngs) {
+    for (const points of tram) {
       this.greenPolylines.push(
         L.polyline(points, {
           pane: TRAM_OVERLAY_PANE,
           interactive: false,
           color: TRAM_LINE_COLOR,
+          weight: width.line,
+        }).addTo(this.map),
+      );
+    }
+    for (const points of metro) {
+      this.metroPolylines.push(
+        L.polyline(points, {
+          pane: TRAM_OVERLAY_PANE,
+          interactive: false,
+          color: METRO_LINE_COLOR,
           weight: width.line,
         }).addTo(this.map),
       );
@@ -140,6 +160,9 @@ export class TramLineOverlay {
       polyline.setStyle({ weight: width.casing });
     }
     for (const polyline of this.greenPolylines) {
+      polyline.setStyle({ weight: width.line });
+    }
+    for (const polyline of this.metroPolylines) {
       polyline.setStyle({ weight: width.line });
     }
   }
@@ -163,11 +186,16 @@ export class TramLineOverlay {
   dispose(): void {
     this.disposed = true;
     this.map.off("zoomend", this.onZoomEnd, this);
-    for (const polyline of [...this.casingPolylines, ...this.greenPolylines]) {
+    for (const polyline of [
+      ...this.casingPolylines,
+      ...this.greenPolylines,
+      ...this.metroPolylines,
+    ]) {
       polyline.remove();
     }
     this.casingPolylines.length = 0;
     this.greenPolylines.length = 0;
+    this.metroPolylines.length = 0;
     this.map.getPane(TRAM_OVERLAY_PANE)?.remove();
   }
 }

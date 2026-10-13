@@ -1,6 +1,5 @@
-/**
- * Digitransit routing API GraphQL client: tram line metadata, API key
- * handling, and the tram-line short-name filter. Transport decision:
+/** The digitransit routing API GraphQL client: tram and metro line metadata,
+ * API key handling, and the line short-name filter. Transport decision:
  * Docs/ADR/0002-data-transport.md. The key is read from import.meta.env
  * (sourced from the untracked .env.local). TV-0018: the same key also
  * authenticates the map's basemap tile requests (Docs/ADR/0001-map-library.md
@@ -31,7 +30,7 @@ export class MissingApiKeyError extends Error {
   }
 }
 
-/** A tram position shown on the map (TV-0005 consumes this). `routeShortName`
+/** One tram position shown on the map (TV-0005 consumes this). `routeShortName`
  * is null when the vehicle's latest position resolves to no displayed GTFS
  * tram line - depot shunting, training/testing or an absent route (TV-0011
  * renders those vehicles out of service: red dot instead of a line number,
@@ -63,11 +62,19 @@ export interface TramPosition {
   /** Next-stop id from the HFP payload's `stop` field, else the HFP topic's
    * level-13 next-stop id (TV-0025; the payload wins when both are present,
    * and the two agreed in every sampled position, so this only widens
-   * coverage from the payload's ~49% to the topic's 100%). */
+   * coverage from the payload's ~49% to the topic's 100%). TV-0029: metro
+   * positions invert this precedence - the topic level wins (measured: it
+   * leads the payload by one stop event) - decided by `mode` below. */
   nextStopId: string | null;
   /** HFP schedule deviation in seconds: positive = ahead of timetable,
    * negative = behind (TV-0023). */
   scheduleDeviation: number | null;
+  /** TV-0029: which feed the vehicle came from - "tram" or "metro". Metro
+   * always carries scheduleDeviation null (the feed publishes no dl), so
+   * consumers that require a reported deviation need no extra check beyond
+   * their existing null handling; the field still lets the popup hide its
+   * deviation cell and the heatmap state its exclusion explicitly. */
+  mode: "tram" | "metro";
 }
 
 interface TramRoutesData {
@@ -197,8 +204,23 @@ async function buildTramRouteIndex(
   rawRouteListForDebug = rawRoutes;
   const index = new Map<string, string>();
   for (const route of data.routes) {
-    if (route.mode !== "TRAM" || route.shortName === null) continue;
-    if (!isTramLineShortName(route.shortName)) continue;
+    // TV-0029: the metro routes ride the same per-session metadata response
+    // (the query carries no transportModes filter, so all modes already come
+    // back) - one request stays one request. The admission predicate is per
+    // mode: a TRAM record needs a tram line short name, a SUBWAY record a
+    // metro one (M1, M2 and the M1B/M2B short-turns - isMetroLineShortName
+    // below). The tram filter admits none of those, which is what kept the
+    // metro routes out of the index in the first cut: they then resolved
+    // only through the live-trip match, which is asked for the indexed
+    // routes' patterns, so nothing matched and metro fell through to the
+    // red dot (review round 2026-10-12).
+    if (
+      (route.mode !== "TRAM" && route.mode !== "SUBWAY") ||
+      route.shortName === null
+    ) {
+      continue;
+    }
+    if (!isAdmittedLineShortName(route.mode, route.shortName)) continue;
     index.set(route.gtfsId, route.shortName);
   }
   tramLineIndexForDebug = index;
@@ -211,6 +233,27 @@ const TRAM_LINE_SHORT_NAME = /^(?:(?:[1-9]|1[0-5])[A-Z]?|[A-Z])$/;
 
 export function isTramLineShortName(shortName: string): boolean {
   return TRAM_LINE_SHORT_NAME.test(shortName.trim().toUpperCase());
+}
+
+/** TV-0029: metro lines Tram View displays - exactly the four short names
+ * HSL's metro publishes: M1, M2 and the M1B/M2B short-turns (measured live on
+ * 2026-10-12; the GTFS routes return these and no others). An exact set, not
+ * a pattern: a looser shape (M + digits + optional letter) would admit short
+ * names no metro line has - M3/M10 or a hypothetical M1A/M2C - and index a
+ * route the live feed can never produce. Case-insensitive. */
+const METRO_LINE_SHORT_NAMES = new Set(["M1", "M2", "M1B", "M2B"]);
+
+export function isMetroLineShortName(shortName: string): boolean {
+  return METRO_LINE_SHORT_NAMES.has(shortName.trim().toUpperCase());
+}
+
+/** The index's per-mode line-name filter (TV-0029): a TRAM route must pass
+ * isTramLineShortName, a SUBWAY route isMetroLineShortName. Any other mode
+ * is unadmitted. */
+function isAdmittedLineShortName(mode: string, shortName: string): boolean {
+  return mode === "SUBWAY"
+    ? isMetroLineShortName(shortName)
+    : isTramLineShortName(shortName);
 }
 
 /** Maps an HFP route id (no feed prefix) to the line short name, or null
@@ -231,8 +274,8 @@ export function resolveTramShortName(
  * - `absent-from-gtfs`: no such gtfsId in the raw GTFS route list at all.
  * - `not-tram-mode`: the route exists but is another GTFS mode (e.g. BUS).
  * - `short-name-missing`: a TRAM route whose GTFS shortName is null.
- * - `short-name-fails-line-criteria`: a TRAM route whose shortName does not
- *   pass isTramLineShortName (the index's pre-filter). */
+ * - `short-name-fails-line-criteria`: a TRAM or SUBWAY route whose shortName
+ *   does not pass its mode's line filter (the index's pre-filter). */
 export type TramRouteResolutionReason =
   | "in-tram-line-index"
   | "absent-from-gtfs"
@@ -251,14 +294,15 @@ export interface TramRouteResolution {
   inTramLineIndex: boolean;
   reason: TramRouteResolutionReason;
   /** Route mode from the raw GTFS list; null when the route is absent from
-   * it. For an indexed route this is the raw record's real mode (TRAM by
-   * construction of the index). */
+   * it. For an indexed route this is the raw record's real mode (TRAM or
+   * SUBWAY by construction of the index). */
   mode: string | null;
   /** The GTFS shortName: the indexed value when the route is in the index,
    * else the raw GTFS shortName when the route exists there. */
   shortName: string | null;
-  /** Whether the shortName passes isTramLineShortName, recomputed here;
-   * null when there is no shortName to test. */
+  /** Whether the shortName passes the route mode's line filter (TV-0029:
+   * tram or metro per the raw record's mode), recomputed here; null when
+   * there is no shortName to test. */
   passesLineCriteria: boolean | null;
 }
 
@@ -277,13 +321,19 @@ export function resolveTramRouteDebug(
   const rawRoute = raw.get(gtfsId) ?? null;
   const indexedShortName = index.get(gtfsId);
   if (indexedShortName !== undefined) {
+    // The raw record is normally present; when it is not, the mode is
+    // inferred from the short name (a metro short name is M-prefixed) so the
+    // recomputed criteria stay per mode (TV-0029).
+    const mode =
+      rawRoute?.mode ??
+      (isMetroLineShortName(indexedShortName) ? "SUBWAY" : "TRAM");
     return {
       gtfsId,
       inTramLineIndex: true,
       reason: "in-tram-line-index",
-      mode: rawRoute?.mode ?? "TRAM",
+      mode,
       shortName: indexedShortName,
-      passesLineCriteria: isTramLineShortName(indexedShortName),
+      passesLineCriteria: isAdmittedLineShortName(mode, indexedShortName),
     };
   }
   if (rawRoute === null) {
@@ -306,7 +356,7 @@ export function resolveTramRouteDebug(
       passesLineCriteria:
         rawRoute.shortName === null
           ? null
-          : isTramLineShortName(rawRoute.shortName),
+          : isAdmittedLineShortName(rawRoute.mode, rawRoute.shortName),
     };
   }
   if (rawRoute.shortName === null) {
@@ -325,7 +375,10 @@ export function resolveTramRouteDebug(
     reason: "short-name-fails-line-criteria",
     mode: rawRoute.mode,
     shortName: rawRoute.shortName,
-    passesLineCriteria: isTramLineShortName(rawRoute.shortName),
+    passesLineCriteria: isAdmittedLineShortName(
+      rawRoute.mode,
+      rawRoute.shortName,
+    ),
   };
 }
 
@@ -749,18 +802,22 @@ export function loadRouteStopNames(
  * the map page's own layer draws the whole network shape from it, and the
  * vehicle overview page (ADR-0004) initiates no overlay request. `geometry`
  * is the planned pattern shape as `[Coordinates] {lat, lon}` objects, not an
- * encoded polyline. The `transportModes: [TRAM]` filter is the scope filter:
+ * encoded polyline. The `transportModes` filter is the scope filter:
  * every returned pattern is drawn, with no deduplication into one geometry
  * per displayed short name and no simplification (the accepted decision) -
  * the app's `isTramLineShortName` display filter is deliberately not applied
  * here, and a returned short name outside the displayed set is reported to
- * the caller as-is rather than filtered away.
+ * the caller as-is rather than filtered away. TV-0029: the filter widened to
+ * [TRAM, SUBWAY] so the metro corridors ride the same one per-session
+ * request (no second geometry query) and draw in the same pane with the
+ * metro color (TramLineOverlay keys the color off the route's mode).
  */
 const TRAM_NETWORK_GEOMETRY_QUERY = `
   query TramNetworkGeometry {
-    routes(transportModes: [TRAM]) {
+    routes(transportModes: [TRAM, SUBWAY]) {
       gtfsId
       shortName
+      mode
       patterns {
         directionId
         geometry {
@@ -794,12 +851,17 @@ export interface TramRouteGeometry {
    * to filter the pattern set (the accepted "every pattern" decision). */
   shortName: string | null;
   patterns: TramPatternGeometry[];
+  /** TV-0029: the route's GTFS mode ("TRAM" or "SUBWAY"), the only signal
+   * the overlay needs to color a metro route with the metro line orange
+   * instead of the tram green. */
+  mode: string;
 }
 
 interface TramNetworkGeometryData {
   routes: {
     gtfsId: string;
     shortName: string | null;
+    mode: string;
     patterns: {
       directionId: number;
       geometry: { lat: number; lon: number }[] | null;
@@ -841,6 +903,7 @@ async function fetchTramNetworkGeometry(
   return data.routes.map((route) => ({
     gtfsId: route.gtfsId,
     shortName: route.shortName,
+    mode: route.mode,
     patterns: route.patterns.map((pattern) => ({
       directionId: pattern.directionId,
       coordinates: (pattern.geometry ?? []).filter(

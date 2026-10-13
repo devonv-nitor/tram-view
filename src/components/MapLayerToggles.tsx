@@ -19,7 +19,8 @@
  * it out ("Toggle the punctuality heatmap, on"), so the visible two-letter
  * mnemonic never has to be announced; the controls are real <button>s, so
  * Enter/Space operate them for free. The marker layer is deliberately not
- * toggleable: the tram positions are the app's core read (requirement 9).
+ * toggleable: the tram positions are the app's core read (requirement 9) -
+ * and since TV-0029 that layer renders the metro trains too.
  */
 
 /** The two buttons' visible mnemonics, chosen per the user's design. */

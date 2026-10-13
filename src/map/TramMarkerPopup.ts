@@ -24,6 +24,18 @@
  * explanation (and the hover title) say so in one line, and every fallback
  * is the same muted "—" the other cells use - never an invented number.
  *
+ * TV-0029: for a metro position the Deviation cell is not rendered at all -
+ * the metro stream publishes no `dl` (null in 100% of measured samples), so
+ * the cell would be a permanent dash; hiding it is more honest than showing
+ * a dash (the Deviation cell is simply absent from row 2, whose remaining
+ * cell spans the row). The ETA cell renders its muted dash: metro always
+ * reports scheduleDeviation null, so `TramMarkerLayer.etaSeconds` already
+ * returns null for it and the generic dash fallback handles it - the tram
+ * ETA wiring is not metro-tuned (the timetable's stop-time anchoring
+ * deserves the TV-0026 treatment before it prints metro numbers; recorded
+ * in the TV-0029 task). The GTFS key row shows the resolved route id
+ * (HSL:31M1 etc.) as today.
+ *
  * Presentation only - nothing here mutates the snapshot state. Content is
  * rebuilt from the current position on every snapshot while the popup is open
  * (see TramMarkerLayer).
@@ -130,6 +142,7 @@ export function buildTramPopupHtml(
   etaSeconds: number | null = null,
 ): string {
   const barTram = isSparakoffBarTram(position);
+  const isMetro = position.mode === "metro";
   const lineLabel = barTram
     ? SPARAKOFF_MARKER_LETTER
     : (position.routeShortName ?? "—");
@@ -164,16 +177,20 @@ export function buildTramPopupHtml(
     `<span class="tram-hud-popup__sr">${escapeHtml(ETA_EXPLANATION)}</span>` +
     `</div>` +
     `</div>` +
-    // Row 2: Doors + Schedule deviation side by side
+    // Row 2: Doors + Schedule deviation side by side. TV-0029: on metro the
+    // Deviation cell is not rendered (the metro stream publishes no dl, so
+    // the cell would be a permanent dash) and the Doors cell spans the row.
     `<div class="tram-hud-popup__row">` +
-    `<div class="tram-hud-popup__metric">` +
+    `<div class="tram-hud-popup__metric${isMetro ? " tram-hud-popup__metric--solo" : ""}">` +
     `<span class="tram-hud-popup__metric-label">Doors</span>` +
     `<span class="tram-hud-popup__metric-value">${doorHtml(position.doorState)}</span>` +
     `</div>` +
-    `<div class="tram-hud-popup__metric">` +
-    `<span class="tram-hud-popup__metric-label">Deviation</span>` +
-    `<span class="tram-hud-popup__metric-value ${deviationClass(deviation.tone)}">${escapeHtml(deviation.compact)}</span>` +
-    `</div>` +
+    (isMetro
+      ? ""
+      : `<div class="tram-hud-popup__metric">` +
+        `<span class="tram-hud-popup__metric-label">Deviation</span>` +
+        `<span class="tram-hud-popup__metric-value ${deviationClass(deviation.tone)}">${escapeHtml(deviation.compact)}</span>` +
+        `</div>`) +
     `</div>` +
     // Next stop row with the #fcb919 left accent border (no deviation here)
     `<div class="tram-hud-popup__next-stop">` +

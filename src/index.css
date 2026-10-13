@@ -32,6 +32,14 @@
      hue; like the brand A/B/C bodies it is light enough that the label ink
      switches to dark (contrast below). */
   --tram-type-sparakoff: #eb4f49;
+  /* Metro train body (TV-0029): HSL's official metro orange (user decision
+     2026-10-12, supersedes the task's original blue), one hue for every
+     metro class (the classes are distinguishable by tooltip/vehicle number,
+     not by color). Fixed like the tram marker colors: the basemap under the
+     markers is always light. Shared with the overlay's metro corridor color
+     (src/map/constants.ts's METRO_LINE_COLOR is the same value by design;
+     the marker's copy lives here next to the other marker colors). */
+  --tram-type-metro: #f15f22;
 }
 
 * {
@@ -307,6 +315,12 @@ body {
   border-color: #fff;
 }
 
+/* Metro chip (TV-0029): the same metro orange as the marker body and the
+   overlay's metro corridor (the one orange shared by all three classes). */
+.debug-panel__chip--metro .debug-panel__chip-swatch {
+  background: var(--tram-type-metro);
+}
+
 .debug-panel__chip-count {
   font-weight: 600;
   font-variant-numeric: tabular-nums;
@@ -563,6 +577,19 @@ body {
   background: var(--tram-type-sparakoff);
 }
 
+/* Metro train (TV-0029): one orange body for every metro class (requirement
+   3, amended 2026-10-12 to HSL's official metro orange - the user decision
+   that supersedes the task's original blue; the classes are distinguishable
+   by tooltip/vehicle number, not by color - three shades would be
+   indistinguishable at marker scale). The teardrop geometry, rotation and
+   offline dot are the tram marker's own rules, so a metro marker differs
+   only in its body color. Label ink is white per the user's explicit
+   choice (2026-10-13) - measured 3.3:1 against the orange, below the
+   WCAG 4.5:1 threshold, acknowledged and accepted for these labels. */
+.tram-marker--metro .tram-marker__shape {
+  background: var(--tram-type-metro);
+}
+
 /* Not-in-service dot (TV-0011): replaces the line label on an out-of-service
    marker (routeShortName null). Both children of .tram-marker are positioned;
    the dot sits centered under the label span and paints above the rotor's
@@ -731,6 +758,14 @@ body {
   background: #1a1d23;
 }
 
+/* TV-0029: a metro popup's row 2 carries one cell (Doors) - the Deviation
+   cell is not rendered (metro publishes no dl) - so the cell spans the row:
+   flex: 1 already stretches it, and this class documents the solo state.
+   The visual result is identical to the tram rows' wider cell. */
+.tram-hud-popup__metric--solo {
+  flex: 1;
+}
+
 .tram-hud-popup__metric-label {
   display: block;
   margin-bottom: 0.15rem;
@@ -867,12 +902,24 @@ body {
    three. The unknown body keeps the white ink (6:1 on its mid gray).
    TV-0013: the SpåraKoff body (rgb(235, 79, 73), luminance 0.237) gets the
    same dark ink - white falls to 3.65:1 on it while #1a1a1a meets
-   4.76:1 (contrast checked like TV-0010). */
+   4.76:1 (contrast checked like TV-0010). TV-0029: the metro body (#f15f22, luminance 0.270) joined them at
+   merge, but the user's 2026-10-13 review choice sets the metro label
+   ink to WHITE - the 3.28:1 contrast is acknowledged and accepted (the
+   metro label is the only ink exception; the tram brand hues keep the
+   dark ink). */
 .tram-marker--a .tram-marker__label,
 .tram-marker--b .tram-marker__label,
 .tram-marker--c .tram-marker__label,
 .tram-marker--sparakoff .tram-marker__label {
   color: #1a1a1a;
+}
+
+/* TV-0029 (user 2026-10-13): the metro label ink is white - the user's
+   explicit choice, acknowledged as below the WCAG 4.5:1 threshold (3.3:1
+   measured) and accepted for these labels. Kept as its own rule so the
+   metro ink decision stays separate from the tram ink rule above. */
+.tram-marker--metro .tram-marker__label {
+  color: #ffffff;
 }
 
 /* Tram type colors in the strip (TV-0027, TV-0009): the legend became the
@@ -1159,6 +1206,12 @@ body {
 
 .badge--sparakoff {
   background: var(--tram-type-sparakoff);
+}
+
+/* TV-0029 (user 2026-10-13): the metro vehicle's overview badge - the same
+   metro orange as the map marker. */
+.badge--metro {
+  background: var(--tram-type-metro);
 }
 
 .hero__title {

@@ -51,9 +51,13 @@ function Metric({
 export function TelemetryGrid({
   telemetry,
   now,
+  isMetro = false,
 }: {
   telemetry: HfpVehicleEvent | null;
   now: number;
+  /** TV-0029 (user 2026-10-13): a metro vehicle's feed publishes no dl, so
+   * the Schedule-deviation metric renders nothing instead of a dash. */
+  isMetro?: boolean;
 }) {
   if (telemetry === null) {
     return (
@@ -90,12 +94,14 @@ export function TelemetryGrid({
           value={formatHeading(telemetry.heading)}
           note="hdg; the octant is our reading of the number"
         />
-        <Metric
-          label="Schedule deviation"
-          value={deviation.compact}
-          tone={deviation.tone}
-          note={`dl: ${deviation.text}`}
-        />
+        {isMetro ? null : (
+          <Metric
+            label="Schedule deviation"
+            value={deviation.compact}
+            tone={deviation.tone}
+            note={`dl: ${deviation.text}`}
+          />
+        )}
         <Metric
           label="Position source"
           value={telemetry.loc ?? "—"}

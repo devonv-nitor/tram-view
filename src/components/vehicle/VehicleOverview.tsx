@@ -15,6 +15,7 @@ import {
   isSparakoffBarTram,
   SPARAKOFF_LEGEND_LABEL,
 } from "../../lib/fleet.ts";
+import { METRO_OPERATOR_ID, metroClassTooltip } from "../../lib/metro.ts";
 import {
   describeJourney,
   estimateNextArrival,
@@ -79,6 +80,12 @@ function Hero({
 }) {
   const telemetry = view.telemetry;
   const { journey, estimate, nextStopLabel } = derived;
+  // TV-0029 (user 2026-10-13): a metro vehicle's feed publishes no dl, no
+  // door state and no traffic-light-priority events (live-verified), so the
+  // dl answer row, the deviation chart and the Doors/TLP cards render
+  // nothing for operator 50 - showing their dashes/empty states would
+  // imply data the feed does not carry.
+  const isMetro = view.operatorId === METRO_OPERATOR_ID;
   const deviation = describeDeviation(telemetry?.dl ?? null);
 
   return (
@@ -87,7 +94,12 @@ function Hero({
         <div>
           <div className="hero__line-row">
             <span
-              className={`badge badge--${tramCategoryInfo(view.telemetry?.vehicleNumber ?? 0).category}`}
+              className={`badge badge--${
+                view.operatorId === METRO_OPERATOR_ID
+                  ? "metro"
+                  : tramCategoryInfo(view.telemetry?.vehicleNumber ?? 0)
+                      .category
+              }`}
             >
               {lineBadge(view)}
             </span>
@@ -103,7 +115,15 @@ function Hero({
               vehicleNumber: view.vehicleNumber,
             })
               ? `${SPARAKOFF_LEGEND_LABEL} (bar tram)`
-              : (tramCategoryInfo(view.vehicleNumber).model ?? "Unknown type")}
+              : view.operatorId === METRO_OPERATOR_ID
+                ? // TV-0029 (user 2026-10-13 report): the overview is
+                  // tram-scoped, so a metro vehicle has no tram category -
+                  // show its metro class instead of falling into the tram
+                  // number ranges (a metro 1xx/2xx/3xx number would
+                  // otherwise claim an MLNRV/Artic model it does not have).
+                  metroClassTooltip(view.vehicleNumber)
+                : (tramCategoryInfo(view.vehicleNumber).model ??
+                  "Unknown type")}
             {telemetry?.topic.headsign
               ? ` · towards ${telemetry.topic.headsign}`
               : ""}
@@ -148,17 +168,19 @@ function Hero({
               : `${formatClock(estimate.estimatedAt, false)} (${formatCountdown(view.now, estimate.estimatedAt)})`}
           </b>
         </div>
-        <div className="answer">
-          <span className="answer__label">Schedule deviation (dl)</span>
-          <b className={`answer__value delta--${deviation.tone}`}>
-            {deviation.text}
-          </b>
-          <span className="answer__note">
-            {deviation.seconds === null
-              ? "the feed reported no dl"
-              : `reported ${formatAgo(view.now, telemetry?.receivedAt ?? null)}`}
-          </span>
-        </div>
+        {isMetro ? null : (
+          <div className="answer">
+            <span className="answer__label">Schedule deviation (dl)</span>
+            <b className={`answer__value delta--${deviation.tone}`}>
+              {deviation.text}
+            </b>
+            <span className="answer__note">
+              {deviation.seconds === null
+                ? "the feed reported no dl"
+                : `reported ${formatAgo(view.now, telemetry?.receivedAt ?? null)}`}
+            </span>
+          </div>
+        )}
         <div className="answer">
           <span className="answer__label">Telemetry age</span>
           <b className="answer__value">
@@ -250,6 +272,9 @@ export function VehicleOverview({
   vehicleNumber: number;
 }) {
   const view = useVehicleTelemetry(operatorId, vehicleNumber);
+  // TV-0029 (user 2026-10-13): the dl/doors/TLP surfaces hide for metro
+  // (operator 50) - the feed publishes none of that.
+  const isMetro = operatorId === METRO_OPERATOR_ID;
   const pattern: TripPattern | null = view.pattern;
   const telemetry = view.telemetry;
   const journey = describeJourney(
@@ -310,18 +335,26 @@ export function VehicleOverview({
           )}
         </div>
         <div className="overview__col">
-          <TelemetryGrid telemetry={view.telemetry} now={view.now} />
-          <DeltaChart
-            samples={view.dlSamples}
-            now={view.now}
-            latestDl={view.telemetry?.dl ?? null}
-          />
-          <DoorsCard
-            doors={view.doors}
+          <TelemetryGrid
             telemetry={view.telemetry}
             now={view.now}
+            isMetro={isMetro}
           />
-          <TlpCard tlp={view.tlp} now={view.now} />
+          {isMetro ? null : (
+            <DeltaChart
+              samples={view.dlSamples}
+              now={view.now}
+              latestDl={view.telemetry?.dl ?? null}
+            />
+          )}
+          {isMetro ? null : (
+            <DoorsCard
+              doors={view.doors}
+              telemetry={view.telemetry}
+              now={view.now}
+            />
+          )}
+          {isMetro ? null : <TlpCard tlp={view.tlp} now={view.now} />}
           <EventLog events={view.events} pattern={pattern} />
           <ReportedFields
             event={view.lastEvent}

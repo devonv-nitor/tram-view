@@ -9,11 +9,13 @@ import type { TramPosition } from "../lib/digitransit.ts";
 import type { TramPositionsState } from "../hooks/useTramPositions";
 import {
   isSparakoffBarTram,
+  isVehicleOutOfService,
   SPARAKOFF_LEGEND_LABEL,
   TRAM_CATEGORY_LEGEND,
   tramCategoryInfo,
   type TramCategory,
 } from "../lib/fleet.ts";
+import { metroVehicleClass } from "../lib/metro.ts";
 
 /** Live per-type counts for the strip's legend chips (TV-0012), derived
  * from the current positions snapshot on every render - no state of their
@@ -26,12 +28,19 @@ import {
  * out-of-service trams (routeShortName null - the same condition
  * TramMarkers.ts renders the TV-0011 red dot from, minus the SpåraKoff
  * exception which never shows the dot) are excluded here too: each has its
- * own chip below, so leaving them in would double-count them across chips. */
+ * own chip below, so leaving them in would double-count them across chips.
+ * TV-0029: metro positions are not tram categories - they are excluded
+ * here; resolved metro with a known class is counted by the Metro chip
+ * (countMetroPositions below), the rest of metro (unresolved route,
+ * unknown class) tallies into Not-in-service with the tram red dots, so
+ * the tram category counts stay tram-only and the chips keep partitioning
+ * the snapshot. */
 function countByCategory(
   positions: TramPosition[],
 ): Record<TramCategory, number> {
   const counts: Record<TramCategory, number> = { A: 0, B: 0, C: 0, UNKNOWN: 0 };
   for (const position of positions) {
+    if (position.mode === "metro") continue;
     if (isSparakoffBarTram(position)) continue;
     if (position.routeShortName === null) continue;
     counts[tramCategoryInfo(position.vehicleNumber).category] += 1;
@@ -39,21 +48,61 @@ function countByCategory(
   return counts;
 }
 
-/** TV-0027 review round: the live count for the Not-in-service chip -
- * positions whose route resolves to no displayed tram line, the exact
- * condition TramMarkers.ts renders the red dot from (routeShortName null),
- * minus the SpåraKoff exception (the bar tram never shows the dot; it has
- * its own chip - TV-0013). The snapshot dedups per vehicle, so this and
- * every chip count here is live and non-double-counting. */
-function countOffline(positions: TramPosition[]): number {
+/** TV-0029: the live count for the always-on Metro chip - resolved metro
+ * vehicles only: mode "metro", a resolved route (routeShortName non-null)
+ * and a known class (metroVehicleClass non-null, the requirement-8 rule
+ * TramMarkers.ts renders the red dot from - an out-of-range or malformed
+ * vehicle number is out of the known fleet). Everything that fails one of
+ * those tallies into the Not-in-service chip below, which is the chip that
+ * counts the red dots; a metro vehicle of unknown class renders exactly
+ * that red dot, so counting it under Metro here would show a chip count
+ * that includes a vehicle the map does not label. Any class counts while
+ * resolved and known (the classes are not color-coded; a count chip per
+ * class would be noise). */
+function countMetroPositions(positions: TramPosition[]): number {
   let count = 0;
   for (const position of positions) {
-    if (position.routeShortName === null && !isSparakoffBarTram(position)) {
+    if (
+      position.mode === "metro" &&
+      position.routeShortName !== null &&
+      metroVehicleClass(position.vehicleNumber) !== null
+    ) {
       count += 1;
     }
   }
   return count;
 }
+
+/** TV-0027 review round: the live count for the Not-in-service chip -
+ * exactly the vehicles TramMarkers.ts renders the red dot from, through the
+ * one shared predicate (isVehicleOutOfService), so the count can never
+ * drift from the map: route resolves to no displayed line (both modes; tram
+ * TV-0011), minus the SpåraKoff exception (the bar tram never shows the
+ * dot; it has its own chip - TV-0013), plus - TV-0029 - metro vehicles of
+ * unknown class (requirement 8: out of the known fleet, so the dot). The
+ * snapshot dedups per vehicle, so this and every chip count here is live
+ * and non-double-counting. TV-0029: the partition is exact per the modes:
+ * tram category chips (resolved trams by class) + Metro chip (resolved
+ * metro with a known class) + Not-in-service (all unresolved vehicles of
+ * both modes, plus unknown-class metro, minus SpåraKoff) + SpåraKoff (its
+ * own identity) = the snapshot total. countByCategory excludes metro and
+ * the unresolved; countMetroPositions excludes the unresolved and the
+ * unknown-class; this counts everything the other two exclude, so no
+ * vehicle tallies twice and none is dropped - the sum is the snapshot
+ * length, always. */
+function countOffline(positions: TramPosition[]): number {
+  let count = 0;
+  for (const position of positions) {
+    if (isVehicleOutOfService(position)) count += 1;
+  }
+  return count;
+}
+
+/** TV-0029: the Metro chip's short label and its full title (the tooltip -
+ * the marker orange with the class reminder, the same one-orange-for-all
+ * decision the markers carry). */
+const METRO_CHIP_SHORT = "Metro";
+const METRO_CHIP_TITLE = "HSL metro trains (M100/M200/M300)";
 
 /** TV-0012: the fleet resolver's model name (the chip's `title` tooltip -
  * the full label, not the chip's short label) plus the chip's short display
@@ -278,6 +327,7 @@ export function TramStatusPanel({
   // (see the sum note on the offline chip below).
   const counts = countByCategory(trams.positions);
   const offlineCount = countOffline(trams.positions);
+  const metroCount = countMetroPositions(trams.positions);
   const sparakoffCount = trams.positions.reduce(
     (n, position) => (isSparakoffBarTram(position) ? n + 1 : n),
     0,
@@ -360,7 +410,23 @@ export function TramStatusPanel({
               </span>
             </li>
           )}
-          {/* TV-0011: out-of-service trams keep their category color and
+          {/* TV-0029: the always-on Metro chip, after the tram category
+            chips (and the conditional SpåraKoff chip) and before
+            Not-in-service: one chip for all metro classes (they are not
+            color-coded, so one counted chip - no per-class noise). The
+            count is resolved metro with a known class; unresolved metro
+            routes and unknown-class metro tally into Not-in-service below
+            (that chip counts every red dot on the map), so the chips still
+            partition the snapshot. */}
+          <li
+            className="debug-panel__chip debug-panel__chip--metro"
+            title={METRO_CHIP_TITLE}
+          >
+            <span className="debug-panel__chip-swatch" aria-hidden="true" />
+            <span className="debug-panel__chip-count">{metroCount}</span>
+            <span className="debug-panel__chip-label">{METRO_CHIP_SHORT}</span>
+          </li>
+          {/* TV-0011: out-of-service vehicles keep their body color and
             replace the line number with a red dot - not a vehicle type, so
             it sits after the category chips. TV-0027 review round: the
             chip carries its live count - countByCategory excludes the
@@ -368,7 +434,11 @@ export function TramStatusPanel({
             exception which never shows the dot), so the chips partition
             the snapshot: the status line's total equals the sum of the
             category counts + this count + the SpåraKoff count (0 or 1).
-            The mockup's count 3 is that live number, not a constant. */}
+            TV-0029: the count spans both modes - every vehicle the marker
+            layer renders the red dot for, through the one shared predicate
+            (isVehicleOutOfService): unresolved routes of both modes, plus
+            metro vehicles of unknown class. The mockup's count 3 is that
+            live number, not a constant. */}
           <li
             className="debug-panel__chip debug-panel__chip--offline"
             title={OFFLINE_CHIP_TITLE}

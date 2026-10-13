@@ -9,6 +9,7 @@ import {
   type MqttConnectionState,
   type MqttSubscription,
 } from "./mqtt.ts";
+import { METRO_OPERATOR_ID } from "./metro.ts";
 
 /** HSL HFP MQTT broker (WebSocket endpoint, anonymous access). */
 export const HFP_MQTT_URL = "wss://mqtt.hsl.fi:443/";
@@ -16,6 +17,12 @@ export const HFP_MQTT_URL = "wss://mqtt.hsl.fi:443/";
 /** Ongoing-journey vehicle-position events, tram mode. The topic tree lets
  * the broker filter by transport mode server-side. */
 export const TRAM_POSITION_TOPIC = "/hfp/v2/journey/ongoing/vp/tram/#";
+
+/** TV-0029: ongoing-journey vehicle-position events, metro mode - the same
+ * topic shape with `metro` at the mode level, on the same broker (measured
+ * ~40 raw msg/s against trams' ~380-400). One wildcard subscription is the
+ * right unit; no per-line sub-filter. */
+export const METRO_POSITION_TOPIC = "/hfp/v2/journey/ongoing/vp/metro/#";
 
 /** One tram position parsed from an HFP VP message. */
 export interface HfpVehiclePosition {
@@ -47,6 +54,12 @@ export interface HfpVehiclePosition {
   topicNextStopId: string | null;
   /** Destination/headsign text parsed from the HFP topic (TV-0023). */
   headsign: string | null;
+  /** TV-0029: which feed the position came from - `tram` from the tram
+   * topic filter, `metro` from the metro one. The payload parser is
+   * mode-agnostic (one VP shape); the subscription source decides the value.
+   * The snapshot builder reads it for the metro next-stop precedence
+   * inversion and carries it into TramPosition.mode. */
+  mode: "tram" | "metro";
 }
 
 interface HfpVpPayload {
@@ -105,6 +118,7 @@ export function parseHfpPosition(payload: string): HfpVehiclePosition | null {
     stop: typeof vp.stop === "number" ? vp.stop : null,
     topicNextStopId: null,
     headsign: null,
+    mode: "tram",
   };
 }
 
@@ -122,14 +136,18 @@ export function vehicleKey(position: {
  * broker's topic levels are, and the filter ends in `#` because every HFP
  * topic carries a variable-length geohash tail (`tlr`/`tla` one level more
  * than `vp`). One such filter carries every per-vehicle event type, so the
- * overview needs exactly one subscription. */
+ * overview needs exactly one subscription. TV-0029 (user 2026-10-13: the
+ * overview serves metro too - the mode is the topic's level-6 slot):
+ * metro vehicles (operator 50) subscribe under `metro`, everything else
+ * under `tram`, matching where the fleet actually publishes. */
 export function vehicleTopicFilter(
   operatorId: number,
   vehicleNumber: number,
 ): string {
   const pad = (value: number, width: number) =>
     String(value).padStart(width, "0");
-  return `/hfp/v2/journey/ongoing/+/tram/${pad(operatorId, 4)}/${pad(vehicleNumber, 5)}/#`;
+  const mode = operatorId === METRO_OPERATOR_ID ? "metro" : "tram";
+  return `/hfp/v2/journey/ongoing/+/${mode}/${pad(operatorId, 4)}/${pad(vehicleNumber, 5)}/#`;
 }
 
 /** HFP event types seen on the tram topics. `vp` is the ~1 Hz position
@@ -424,16 +442,20 @@ export interface TramStreamHandle {
   close(): void;
 }
 
-/** Opens the tram position subscription (push, no polling interval).
- * Returns a handle that closes the stream. */
-export function subscribeTramPositions(handlers: {
-  onPosition: (position: HfpVehiclePosition) => void;
-  onConnectionChange: (connected: boolean) => void;
-  onError: (error: Error) => void;
-}): TramStreamHandle {
+/** Opens one network-wide position subscription on a single topic filter
+ * (push, no polling interval). Returns a handle that closes the stream. */
+function openPositionSubscription(
+  topicFilter: string,
+  mode: "tram" | "metro",
+  handlers: {
+    onPosition: (position: HfpVehiclePosition) => void;
+    onConnectionChange: (connected: boolean) => void;
+    onError: (error: Error) => void;
+  },
+): TramStreamHandle {
   const subscription: MqttSubscription = subscribeMqtt(
     HFP_MQTT_URL,
-    TRAM_POSITION_TOPIC,
+    topicFilter,
     {
       onMessage: (topic, payload) => {
         const position = parseHfpPosition(payload);
@@ -446,11 +468,14 @@ export function subscribeTramPositions(handlers: {
             const headsign = topicParts.headsign.trim();
             position.headsign = headsign === "" ? null : headsign;
             // TV-0025: carry the topic's level-13 next-stop id too - the
-            // payload's stop field is absent from about half the vp
-            // messages, the topic level is in all of them, and the two
-            // agreed in every sample; the consumer prefers the payload.
+            // payload's stop field is absent from about half the tram vp
+            // messages, the topic level is in all of them. On tram the
+            // payload wins when present (the two agreed in every sample);
+            // TV-0029: on metro the precedence is inverted (the topic level
+            // is the truth) - the snapshot builder picks per mode.
             position.topicNextStopId = topicParts.nextStopId;
           }
+          position.mode = mode;
           handlers.onPosition(position);
         }
       },
@@ -467,6 +492,33 @@ export function subscribeTramPositions(handlers: {
       subscription.close();
     },
   };
+}
+
+/** Opens the tram position subscription (push, no polling interval).
+ * Returns a handle that closes the stream. */
+export function subscribeTramPositions(handlers: {
+  onPosition: (position: HfpVehiclePosition) => void;
+  onConnectionChange: (connected: boolean) => void;
+  onError: (error: Error) => void;
+}): TramStreamHandle {
+  return openPositionSubscription(TRAM_POSITION_TOPIC, "tram", handlers);
+}
+
+/** TV-0029: opens the metro position subscription (push, no polling
+ * interval) - the same broker, one more WebSocket (the task's request
+ * discipline: exactly one new subscription), the same `subscribeMqtt`
+ * client. The payload parser is the same `parseHfpPosition` - the VP shape
+ * is identical (metro's one extra field, `seq`, is not parsed - it is always
+ * 1 and carries no renderable data) - so only the topic filter differs, and
+ * `onPosition` receives the parsed position with `mode: "metro"` already
+ * set (the topic's next-stop and headsign enrichment is shared above).
+ * Returns a handle that closes the stream. */
+export function subscribeMetroPositions(handlers: {
+  onPosition: (position: HfpVehiclePosition) => void;
+  onConnectionChange: (connected: boolean) => void;
+  onError: (error: Error) => void;
+}): TramStreamHandle {
+  return openPositionSubscription(METRO_POSITION_TOPIC, "metro", handlers);
 }
 
 /** TV-0017: opens the vehicle-scoped subscription for the overview page -
