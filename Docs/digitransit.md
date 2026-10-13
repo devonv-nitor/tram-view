@@ -440,6 +440,43 @@ is recomputed only at stop events, so a blob shows the vehicle's
 only vehicles currently reporting color the map - an uncolored area means
 "no reporting tram here", never "on time".
 
+## Your position on the map (TV-0030)
+
+The map page shows the user's own position as a pulsing blue dot with a
+soft accuracy ring (`src/map/UserLocation.ts`). **The feature makes no
+request of any kind**: the position comes from the browser's own Geolocation
+API (`navigator.geolocation.watchPosition`) - no new dependency, no fetch,
+no MQTT, no tile change. The permission prompt is the browser's own, shown
+when the map page mounts and the watch starts; the app never blocks on it
+and adds no UI of its own. The map renders immediately with the default
+Helsinki view; the dot appears only if and when a fix arrives, and a denial
+or an error leaves the map exactly as it was.
+
+The centering is **once per session**: the first fix with accuracy at most
+500 m centers the map on the user at the tram view's default zoom; a first
+fix coarser than 500 m shows the dot but does not center the map (one
+`console.info` records why - the app never claims a precision the fix does
+not have). Later fixes move the dot and resize the ring but never touch the
+viewport: the user pans the map, the app does not fight the pan, and there
+is no "follow me" mode. The one user-initiated viewport change is clicking
+the dot itself, which re-centers the map on the user's current fix
+(idempotent when already centered).
+
+The accuracy ring is drawn only when the browser reports a usable accuracy
+number (its radius is that number in meters) and is non-interactive: clicks
+meant for the map or the tram markers pass through it. The dot sits in the
+same marker tier as the tram markers, above the heatmap and the route
+overlay, and only the dot's own body takes the click. If fixes stop
+arriving, the dot keeps its last position - no invented movement; there is
+no staleness expiry for v1.
+
+The watch (and the dot) live and die with the map page: navigating to the
+vehicle overview stops the watch; navigating back starts it again. Nothing
+is persisted - no caching, no storage - and the permission itself lives
+with the browser (its own settings control it), never the app. Browsers
+without `navigator.geolocation` (or insecure origins outside the deployed
+HTTPS site) get no prompt and no dot: the feature silently does nothing.
+
 While the tab is hidden, the position stream and the one-second snapshot tick pause
 entirely and resume on focus, so a hidden tab pulls no feed traffic.
 
