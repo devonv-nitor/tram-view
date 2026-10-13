@@ -449,21 +449,26 @@ API (`navigator.geolocation.watchPosition`) - no new dependency, no fetch,
 no MQTT, no tile change. The permission prompt is the browser's own, shown
 when the map page mounts and the watch starts; the app never blocks on it
 and adds no UI of its own. The map renders immediately with the default
-Helsinki view; the dot appears only if and when a fix arrives, and a denial
-or an error leaves the map exactly as it was.
+Helsinki view; the dot appears only if and when a fix with usable
+coordinates arrives, and a denial or an error leaves the map exactly as
+it was.
 
-The centering is **once per session**: the first fix with accuracy at most
-500 m centers the map on the user at the tram view's default zoom; a first
-fix coarser than 500 m shows the dot but does not center the map (one
-`console.info` records why - the app never claims a precision the fix does
-not have). Later fixes move the dot and resize the ring but never touch the
-viewport: the user pans the map, the app does not fight the pan, and there
-is no "follow me" mode. The one user-initiated viewport change is clicking
-the dot itself, which re-centers the map on the user's current fix
-(idempotent when already centered).
+The centering is **once per session**: the first usable fix - real
+coordinates, with an accuracy number at most 500 m - centers the map on
+the user at the tram view's default zoom; a fix that cannot center the
+map (no coordinates, no accuracy number, or one coarser than 500 m)
+shows the dot when its coordinates are real but does not center the map
+(one `console.info` records why - the app never claims a precision the
+fix does not have). Later fixes move the dot and resize the ring but
+never touch the viewport: the user pans the map, the app does not fight
+the pan, and there is no "follow me" mode. The one user-initiated
+viewport change is clicking the dot itself, which re-centers the map on
+the user's current fix (idempotent when already centered).
 
 The accuracy ring is drawn only when the browser reports a usable accuracy
-number (its radius is that number in meters) and is non-interactive: clicks
+number (its radius is that number in meters) and is removed again when a
+later fix carries no usable one - the dot keeps its last real position
+while the precision is unknown - and the ring is non-interactive: clicks
 meant for the map or the tram markers pass through it. The dot sits in the
 same marker tier as the tram markers, above the heatmap and the route
 overlay, and only the dot's own body takes the click. If fixes stop

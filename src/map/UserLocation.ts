@@ -26,16 +26,29 @@
  * cosmetic there, not a click loss: a tram's own click listener still
  * fires wherever the tram body is not exactly covered by the dot's own
  * 14x14 box, and the click-on-dot affordance is the dot's own).
- * Centering (requirement 2): the FIRST fix with accuracy <= 500 m centers
- * the map on the user at DEFAULT_MAP_ZOOM exactly once per session; later
+ * Centering (requirement 2): the first USABLE fix - real coordinates,
+ * finite positive accuracy at most 500 m - centers the map on the user at
+ * DEFAULT_MAP_ZOOM exactly once per session. The once-guard latches only
+ * when a real centering happens: an unusable fix before one (unusable
+ * coordinates, missing/non-positive accuracy, or accuracy coarser than
+ * the threshold) leaves centering available for the next fix. Later
  * fixes never touch the viewport (tracking keeps the marker moving, the
- * user keeps the pan). A first fix coarser than 500 m shows the marker but
- * does NOT center - one console.info records why (requirement 5's honesty
- * note; a later fix that is still too coarse logs its one-time note too -
- * the map may still be sitting un-centered from that same coarse first
- * fix). Clicking the dot is the one user-initiated re-center (requirement
- * 3): it always re-centers on the CURRENT fix (idempotent when already
- * centered) via setOnRecenter's callback.
+ * user keeps the pan). A fix that does not center (too coarse, or no
+ * accuracy number) shows the dot when its coordinates are real and gets
+ * one console.info saying why (requirement 5's honesty note; once per
+ * layer instance, whether before or after the latch). Clicking the dot
+ * is the one user-initiated re-center (requirement 3): it always
+ * re-centers on the CURRENT fix (idempotent when already centered) via
+ * setOnRecenter's callback.
+ *
+ * Per-fix honesty: a fix without a usable accuracy number REMOVES the
+ * accuracy ring - the dot keeps its last real position (the position is
+ * real, the precision is unknown) - and the ring returns only when a fix
+ * with a usable accuracy number arrives. Transient errors
+ * (POSITION_UNAVAILABLE/TIMEOUT) log once per outage, not per error
+ * callback: the flag resets on the next fix with real coordinates (the
+ * metro stream's once-per-outage semantics, useTramPositions.ts).
+ * PERMISSION_DENIED keeps its one-shot stop-the-watch behavior.
  */
 import L from "leaflet";
 import { DEFAULT_MAP_ZOOM } from "./constants";
@@ -43,8 +56,9 @@ import { DEFAULT_MAP_ZOOM } from "./constants";
 /** TV-0030 requirement 2: a fix coarser than this (meters) - or one with
  * no accuracy number - shows the dot but does not center the map; one
  * console.info says why (requirement 5's honesty note). The CENTERING
- * decision itself is made on the FIRST fix only; this threshold gates that
- * decision and the one-time honesty note. Recorded as a constant so the
+ * decision itself is made on the first USABLE fix only (real coordinates,
+ * accuracy finite, positive and at most this threshold); the once-guard
+ * latches only on that real centering. Recorded as a constant so the
  * threshold is tunable at review. */
 export const MAX_CENTERING_ACCURACY_M = 500;
 
@@ -62,12 +76,16 @@ const WATCH_OPTIONS: PositionOptions = {
 const DOT_HALF_PX = 7;
 
 export class UserLocationLayer {
-  /** The dot's marker, created up front and added to the map only when a
-   * first fix arrives (requirement 1: the default view until then). */
+  /** The dot's marker, created up front but never added to the map until
+   * the first fix with usable coordinates arrives (requirement 1: the
+   * default view until then - the dot does not exist before that; its
+   * [0,0] construction position is a placeholder that never renders
+   * because setLatLng lands it on the fix before any add). */
   private readonly marker: L.Marker;
   /** The accuracy ring around the dot: radius in plain meters, Leaflet
    * sizes it to the viewport. Non-interactive so it never blocks a click
-   * (requirement 6). */
+   * (requirement 6). Removed again by any fix without a usable accuracy
+   * number (requirement 5: a stale ring would lie about precision). */
   private readonly accuracyCircle: L.Circle;
   /** The browser's watch id while a watch runs, else null. */
   private watchId: number | null = null;
@@ -78,8 +96,10 @@ export class UserLocationLayer {
   /** The latest fix, held so the re-center click re-centers on the CURRENT
    * position (not the first one). Null until the first fix. */
   private latestFix: { lat: number; lon: number } | null = null;
-  /** The one-time centering has happened (or been decided against for a
-   * coarse first fix) - later fixes never touch the viewport. */
+  /** The one-time centering has happened. Latched ONLY by the real
+   * centering on the first fully usable fix (requirement 2): every
+   * unusable fix before one leaves centering available. Once latched, no
+   * later fix touches the viewport. */
   private centered = false;
   /** True while this layer owns a live watch, so a fix/error that races
    * stop() draws nothing and logs nothing (the layer is dead). */
@@ -87,9 +107,14 @@ export class UserLocationLayer {
   /** One console.info per distinct situation (requirement 5's honesty
    * note): the coarse-fix message fires once per layer instance, on the
    * FIRST fix that is too coarse (or carries no accuracy number) - whether
-   * that is the first fix of the session or a later one - never once per
-   * fix. */
+   * that is before or after the centering latch - never once per fix. */
   private loggedCoarse = false;
+  /** One console.info per outage (the metro stream's once-per-outage
+   * semantics, useTramPositions.ts): the transient-error message fires
+   * once per error state and resets when a fix with real coordinates
+   * arrives, so a healthy fix between two outages starts a new one that
+   * logs once again. PERMISSION_DENIED keeps its one-shot behavior. */
+  private transientLogged = false;
 
   constructor(private readonly map: L.Map) {
     this.marker = L.marker([0, 0], {
@@ -133,7 +158,9 @@ export class UserLocationLayer {
   /** Starts the watch. The browser's permission prompt fires when the
    * watch starts; the app never blocks on it (this runs inside the map
    * effect, after the map already rendered; the view stays on Helsinki
-   * until a usable fix says otherwise). */
+   * until a usable fix says otherwise). Idempotent: a start() while a
+   * watch runs is a no-op - overwriting this.watchId would leak the
+   * first watch (its callbacks would keep firing past stop()). */
   start(): void {
     // No geolocation at all (insecure origin, unsupported browser): the
     // feature silently does nothing - no throw, no broken map (requirement
@@ -141,6 +168,9 @@ export class UserLocationLayer {
     // and the HTTPS deployment both expose it.
     const geo = navigator.geolocation;
     if (geo === undefined) {
+      return;
+    }
+    if (this.watchId !== null) {
       return;
     }
     this.watching = true;
@@ -159,7 +189,9 @@ export class UserLocationLayer {
    * when the map itself is torn down (also when the vehicle overview page
    * unmounts the map page). Stopping the watch is the whole unmount story:
    * nothing persisted - the next session asks again per the browser's own
-   * memory (requirement 4). */
+   * memory (requirement 4). Safe to call twice: clearWatch runs once
+   * (this.watchId is nulled) and the layer removes are no-ops on
+   * already-removed layers. */
   stop(): void {
     if (this.watchId !== null) {
       navigator.geolocation.clearWatch(this.watchId);
@@ -178,7 +210,8 @@ export class UserLocationLayer {
   }
 
   /** The current fix, for the re-center click's target (MapView reads this
-   * in its setOnRecenter callback). Null until the first fix. */
+   * in its setOnRecenter callback). Null until the first fix with usable
+   * coordinates. */
   currentFix(): { lat: number; lon: number } | null {
     return this.latestFix;
   }
@@ -189,54 +222,83 @@ export class UserLocationLayer {
     const lat = position.coords.latitude;
     const lon = position.coords.longitude;
     const accuracy = position.coords.accuracy;
+    // Usable coordinates are the fix's real content: only a finite
+    // lat/lon moves the dot. A usable ACCURACY (finite and positive) is
+    // what draws the ring and gates the centering - the two are checked
+    // separately so an accuracy failure never hides a real position.
+    const coordsUsable = Number.isFinite(lat) && Number.isFinite(lon);
+    if (!coordsUsable) {
+      // A fix with unusable coordinates changes nothing about what is
+      // known: the dot and the ring keep their last real state and the
+      // fix is dropped (a NaN position has no honest render). The
+      // outage note is NOT reset - the position stream is still broken.
+      return;
+    }
+
+    // From here the fix carries real coordinates: the position stream is
+    // working again, so end the current error outage (a later outage
+    // logs once again - the geolocation mirror of the metro stream's
+    // once-per-outage ref in useTramPositions.ts).
+    this.transientLogged = false;
     this.latestFix = { lat, lon };
 
+    // Every fix with real coordinates moves the dot, whether or not it
+    // is on the map yet: setLatLng stores the position before a first
+    // add, so the [0,0] construction placeholder never renders and the
+    // first add lands the dot exactly on its fix (requirement 2's
+    // tracking; the user pans the map, the dot still follows).
+    this.marker.setLatLng([lat, lon]);
+    if (!this.map.hasLayer(this.marker)) {
+      this.marker.addTo(this.map);
+    }
+
     // The ring shows only when the browser reported a usable accuracy
-    // number (requirement 5: no number, no ring - the dot alone; a
-    // zero-radius ring would be a lie about precision too).
-    const usableAccuracy = Number.isFinite(accuracy) && accuracy > 0;
-    if (usableAccuracy) {
+    // number (requirement 5: no number, no ring - a zero-radius ring
+    // would be a lie about precision too). The state update happens even
+    // while the circle is off the map, so the next add redraws at the
+    // right place and radius.
+    const accuracyUsable = Number.isFinite(accuracy) && accuracy > 0;
+    if (accuracyUsable) {
       this.accuracyCircle.setLatLng([lat, lon]);
       this.accuracyCircle.setRadius(accuracy);
       if (!this.map.hasLayer(this.accuracyCircle)) {
         this.accuracyCircle.addTo(this.map);
       }
+    } else {
+      // A fix without a usable accuracy number (missing, NaN,
+      // non-positive) REMOVES the ring: the dot keeps its real position,
+      // but the precision is unknown - a stale ring would lie about it.
+      // The ring stays removed until a fix with a usable accuracy number
+      // arrives.
+      this.accuracyCircle.remove();
     }
 
-    if (!this.centered) {
-      // The FIRST fix: the one centering decision per session (requirement
-      // 2), and the dot's first appearance.
+    const centeringFix = accuracyUsable && accuracy <= MAX_CENTERING_ACCURACY_M;
+    if (centeringFix && !this.centered) {
+      // The ONE centering: the first fully usable fix (real coordinates,
+      // finite positive accuracy at most the threshold) centers the map
+      // at the tram view's default zoom - and ONLY a real centering
+      // latches the once-guard (requirement 2): every unusable fix
+      // before one leaves centering available for the next fix. Later
+      // fixes leave the viewport alone (the user pans, the app never
+      // fights it).
       this.centered = true;
-      this.marker.addTo(this.map);
-      if (usableAccuracy && accuracy <= MAX_CENTERING_ACCURACY_M) {
-        // The ONE centering: the first usable fix centers the map at the
-        // tram view's default zoom. Every later fix leaves the viewport
-        // alone (requirement 2 - the user pans, the app never fights it).
-        this.map.setView([lat, lon], DEFAULT_MAP_ZOOM);
-      } else {
-        // Requirement 5's honesty note: a first fix too coarse to have
-        // centered the map on (or one with no accuracy number at all)
-        // gets one console.info saying so - and does NOT center. The map
-        // keeps whatever view it has (the default Helsinki view in the
-        // normal first-fix case).
-        this.logCoarseOnce(accuracy, usableAccuracy);
-      }
-      return;
-    }
-
-    // Subsequent fixes: move the dot (and the ring) in place; the viewport
-    // is never touched here. A later fix coarser than the threshold logs
-    // its one-time honesty note too (the first such fix), because the map
-    // may still be sitting un-centered from that same coarse first fix.
-    if (!usableAccuracy || accuracy > MAX_CENTERING_ACCURACY_M) {
-      this.logCoarseOnce(accuracy, usableAccuracy);
+      this.map.setView([lat, lon], DEFAULT_MAP_ZOOM);
+    } else if (!accuracyUsable || accuracy > MAX_CENTERING_ACCURACY_M) {
+      // Requirement 5's honesty note: a fix too coarse to have centered
+      // the map on (or one with no accuracy number at all) gets one
+      // console.info saying so - whether the map is still waiting for
+      // its first centering or already centered by an earlier fix. The
+      // map keeps whatever view it has.
+      this.logCoarseOnce(accuracy, accuracyUsable);
     }
   }
 
   /** The one-time console.info for a fix the map did not (or could not)
    * center on: says the accuracy and the threshold, or that no accuracy
    * number came with the fix, and that the dot still tracks. Fires once
-   * per layer instance, on the first such fix, never once per fix. */
+   * per layer instance, on the first such fix (before or after the
+   * centering latch), never once per fix. */
   private logCoarseOnce(accuracy: number, usableAccuracy: boolean): void {
     if (this.loggedCoarse) return;
     this.loggedCoarse = true;
@@ -263,7 +325,12 @@ export class UserLocationLayer {
     }
     // POSITION_UNAVAILABLE and TIMEOUT (and any unknown code): transient -
     // a fix may still arrive, so the watch stays. One console.info per
-    // event, never escalated (requirement 1: the map never breaks).
+    // OUTAGE, not per event: the flag set here resets on the next fix
+    // with real coordinates, so a healthy fix between two outages starts
+    // a new outage that logs once again (the metro stream's
+    // once-per-outage semantics; requirement 1: the map never breaks).
+    if (this.transientLogged) return;
+    this.transientLogged = true;
     console.info(
       "[tram-view] location fix unavailable (code",
       error.code,

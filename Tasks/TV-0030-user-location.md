@@ -55,9 +55,11 @@ lands.
    grants it. A denial, an error, or a timeout leaves the default view -
    the map must never be a blank/throwing page because of geolocation.
 2. **Center once, then track.** When the first fix arrives with a usable
-   accuracy (< 500 m), the map centers on the user at the tram view's
+   accuracy (≤ 500 m), the map centers on the user at the tram view's
    default zoom, and a marker shows their position. The centering is
-   **once per session** (the first fix only) - the map does not re-center
+   **once per session** (the first usable fix only - the once-guard
+   latches only on a real centering, so unusable fixes before one leave
+   centering available) - the map does not re-center
    or follow the user on later fixes; tracking keeps the marker moving
    but never moves the viewport afterwards (the user pans the map, not
    the app; a pan gesture after centering must not be fought by a
