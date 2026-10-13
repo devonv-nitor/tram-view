@@ -42,7 +42,6 @@
 import L from "leaflet";
 import type { TramPosition } from "../lib/digitransit.ts";
 import { isSparakoffBarTram } from "../lib/fleet.ts";
-
 /** A vehicle whose |dl| exceeds this (seconds) contributes nothing: HSL's
  * training/testing runs (opetusajo) report against no real timetable, and a
  * legitimately very-late vehicle beyond ±15 min is equally unusable as a

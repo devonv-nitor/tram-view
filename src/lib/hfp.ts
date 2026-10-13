@@ -9,6 +9,7 @@ import {
   type MqttConnectionState,
   type MqttSubscription,
 } from "./mqtt.ts";
+import { METRO_OPERATOR_ID } from "./metro.ts";
 
 /** HSL HFP MQTT broker (WebSocket endpoint, anonymous access). */
 export const HFP_MQTT_URL = "wss://mqtt.hsl.fi:443/";
@@ -135,14 +136,18 @@ export function vehicleKey(position: {
  * broker's topic levels are, and the filter ends in `#` because every HFP
  * topic carries a variable-length geohash tail (`tlr`/`tla` one level more
  * than `vp`). One such filter carries every per-vehicle event type, so the
- * overview needs exactly one subscription. */
+ * overview needs exactly one subscription. TV-0029 (user 2026-10-13: the
+ * overview serves metro too - the mode is the topic's level-6 slot):
+ * metro vehicles (operator 50) subscribe under `metro`, everything else
+ * under `tram`, matching where the fleet actually publishes. */
 export function vehicleTopicFilter(
   operatorId: number,
   vehicleNumber: number,
 ): string {
   const pad = (value: number, width: number) =>
     String(value).padStart(width, "0");
-  return `/hfp/v2/journey/ongoing/+/tram/${pad(operatorId, 4)}/${pad(vehicleNumber, 5)}/#`;
+  const mode = operatorId === METRO_OPERATOR_ID ? "metro" : "tram";
+  return `/hfp/v2/journey/ongoing/+/${mode}/${pad(operatorId, 4)}/${pad(vehicleNumber, 5)}/#`;
 }
 
 /** HFP event types seen on the tram topics. `vp` is the ~1 Hz position
