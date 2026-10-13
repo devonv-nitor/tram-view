@@ -1,20 +1,19 @@
 # Tram view plan
 
-Status: `TV-0020 (the overview's stop sequence resolved from the vehicle's live trip) and TV-0021 (the overview's always-0 occupancy field removed) are DONE, merged together at d0a747a and re-verified on the deployed site; TV-0018 (HSL basemap tiles) is DONE, merged and re-verified on the deployed site; TV-0022 (a tram's line resolved from the Routing API's live trip when its HFP route id is not a GTFS route id; user decision 2026-09-25: option A) is DONE, merged at 3e7f94f and re-verified on the deployed site; TV-0023 (the marker click popup replaced by the compact HUD dashboard the user chose, mockup 1) is DONE, merged at 8602955 and re-verified on the deployed site; TV-0025 (the popup's Heading cell replaced by an ETA to the next stop, in seconds, from the Routing API's live-trip timetable corrected by the reported deviation) is DONE, merged at 9d0a3f1 and re-verified on the deployed site; TV-0026 (the popup's ETA anchored to the day the tram is running, and the muted dash for a materially passed estimate - the user's 2026-09-28 report of trams stuck at `0 s`) is DONE, merged at 640470d and re-verified on the deployed site; TV-0019 (tram line overlay: user decision 2026-09-28 - draw it, from the Routing API, every pattern; ADR-0001 overlay amendment; 2026-10-12 scope expansion: the overlay and heatmap gained the `TO`/`HM` visibility toggles, which supersede both layers' always-on rules) is DONE, merged at 6123af1 after the user verified the overlay and toggles on the dev server (two anchoring rework rounds) and approved the merge; TV-0029 (metro support: M1/M2 from the same MQTT feed, the live-verified scope in Tasks/TV-0029-metro-support.md; orange #F15F22 markers/lines per the user; the overview serving metro per the user's 2026-10-13 scope) is DONE, merged at 70e5838 after the user verified metro on the dev server (three review-fix rounds) and approved the merge; TV-0024 (retire the dead debug route plumbing) is IN_PROGRESS on its branch; TV-0002..TV-0017 are merged, delta-reviewed and retired (MVP accepted; ADR-0003 key policy live; ADR-0004 vehicle overview page live; ADR-0001/ADR-0003 basemap amendments implemented by TV-0018).`
+Status: `TV-0020 (the overview's stop sequence resolved from the vehicle's live trip) and TV-0021 (the overview's always-0 occupancy field removed) are DONE, merged together at d0a747a and re-verified on the deployed site; TV-0018 (HSL basemap tiles) is DONE, merged and re-verified on the deployed site; TV-0022 (a tram's line resolved from the Routing API's live trip when its HFP route id is not a GTFS route id; user decision 2026-09-25: option A) is DONE, merged at 3e7f94f and re-verified on the deployed site; TV-0023 (the marker click popup replaced by the compact HUD dashboard the user chose, mockup 1) is DONE, merged at 8602955 and re-verified on the deployed site; TV-0025 (the popup's Heading cell replaced by an ETA to the next stop, in seconds, from the Routing API's live-trip timetable corrected by the reported deviation) is DONE, merged at 9d0a3f1 and re-verified on the deployed site; TV-0026 (the popup's ETA anchored to the day the tram is running, and the muted dash for a materially passed estimate - the user's 2026-09-28 report of trams stuck at `0 s`) is DONE, merged at 640470d and re-verified on the deployed site; TV-0019 (tram line overlay: user decision 2026-09-28 - draw it, from the Routing API, every pattern; ADR-0001 overlay amendment; 2026-10-12 scope expansion: the overlay and heatmap gained the `TO`/`HM` visibility toggles, which supersede both layers' always-on rules) is DONE, merged at 6123af1 after the user verified the overlay and toggles on the dev server (two anchoring rework rounds) and approved the merge; TV-0029 (metro support: M1/M2 from the same MQTT feed, the live-verified scope in Tasks/TV-0029-metro-support.md; orange #F15F22 markers/lines per the user; the overview serving metro per the user's 2026-10-13 scope) is DONE, merged at 70e5838 after the user verified metro on the dev server (three review-fix rounds) and approved the merge; TV-0024 (retire the dead TV-0016 debug route plumbing; the index retention survives renamed to tramLineIndex for the TV-0022 live-trip fallback) is DONE, merged at d1abb87 after the user verified the unchanged rendering on the dev server and approved the merge; TV-0002..TV-0017 are merged, delta-reviewed and retired (MVP accepted; ADR-0003 key policy live; ADR-0004 vehicle overview page live; ADR-0001/ADR-0003 basemap amendments implemented by TV-0018). The task backlog is empty.`
 
 The application is a live view of all of the trams currently active in the HSL network,
 providing an at-a-glance view of the state of the tram system.
 
 ## Open work
 
-| Task | Deliverable |
-| ---- | ----------- |
-| [TV-0024](Tasks/TV-0024-retire-debug-route-plumbing.md) — `IN_PROGRESS` | Remove the TV-0016 debug route-resolution plumbing whose only consumer was the deleted debug popup. In progress on the worker branch |
+No open tasks - the backlog is empty. New work is defined from
+[Tasks/_template.md](Tasks/_template.md) when the next request arrives.
 
 
 ## Completed work
 
-All work through TV-0029 is merged and retired; the retired
+All work through TV-0029 and TV-0024 is merged and retired; the retired
 tasks are listed below. New work is defined from
 [_template.md](Tasks/_template.md) and listed under
 [Open work](#open-work).
@@ -47,13 +46,14 @@ tasks are listed below. New work is defined from
 | ~~TV-0025~~                                    | DONE — The popup's Heading cell replaced by an ETA to the next stop in whole seconds (`35 s`, clamped at `0 s`), the Routing API's live-trip timetable for that stop minus the reported schedule deviation; the timetable rides the popup's existing per-route request, so no second query and no second stream; the HFP topic's next-stop id lifted next-stop coverage from 48.9% to 100%. Merged at 9d0a3f1, deployed site re-verified. Round 1 caught a `Files changed` claim for `Docs/digitransit.md` that was not actually written; fixed before PASS |
 | ~~TV-0026~~                                    | DONE — Popup ETA correctness (user report 2026-09-28: some trams stuck at `0 s`, e.g. line 5 #650). The tram reported correctly: the Routing API matched line-5 vehicles to trips dated three days earlier while their stop times lined up with the wall clock, and the ETA anchored that timetable to the trip id's day, so the clamp at 0 printed the error as a confident zero. The stop-time seconds now resolve against the trip-id day and today, the candidate with the nearest corrected arrival winning; `0` prints only when the answer is genuinely 0 (within the 90 s dwell tolerance) and a materially passed estimate shows the muted dash. Merged at 640470d, deployed site re-verified |
 
-Dependency flow: TV-0002…TV-0021 — **all merged and verified; the MVP is
+Dependency flow: TV-0002…TV-0029 — **all merged and verified; the MVP is
 shipped, the post-MVP polish wave (TV-0012..TV-0016) is complete, the
 per-vehicle overview (TV-0017, [ADR-0004](Docs/ADR/0004-vehicle-overview-page.md))
-is live, the basemap is HSL's own style (TV-0018), and the overview's stop
+is live, the basemap is HSL's own style (TV-0018), the overview's stop
 sequence comes from the vehicle's live trip with the always-0 occupancy field
-gone (TV-0020, TV-0021).** The deployed site is
+gone (TV-0020, TV-0021), the status strip is the bottom-left strip with the
+HM/TO layer toggles (TV-0027, TV-0019), the punctuality heatmap and the metro
+fleet are live (TV-0028, TV-0029), and the dead TV-0016 debug plumbing is
+retired (TV-0024).** The deployed site is
 live at <https://devonv-nitor.github.io/tram-view/> (public key policy per
-ADR-0003). Open work is
-[TV-0024](Tasks/TV-0024-retire-debug-route-plumbing.md) (remove the dead
-TV-0016 debug route-resolution plumbing, in progress).
+ADR-0003).
