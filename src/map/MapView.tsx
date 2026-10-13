@@ -6,6 +6,7 @@ import { tryGetDigitransitApiKey } from "../lib/digitransit.ts";
 import { TramMarkerLayer } from "./TramMarkers";
 import { TramLineOverlay } from "./TramLineOverlay";
 import { PunctualityHeatmapLayer } from "./PunctualityHeatmap";
+import { UserLocationLayer } from "./UserLocation";
 import {
   DEFAULT_MAP_ZOOM,
   HELSINKI_TRAM_NETWORK_CENTER,
@@ -46,6 +47,9 @@ export default function MapView({
   const markersRef = useRef<TramMarkerLayer | null>(null);
   const overlayRef = useRef<TramLineOverlay | null>(null);
   const heatmapRef = useRef<PunctualityHeatmapLayer | null>(null);
+  // TV-0030: the user-location layer's handle, the same lifecycle as the
+  // layers above.
+  const userLocationRef = useRef<UserLocationLayer | null>(null);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -86,6 +90,23 @@ export default function MapView({
     // markers; its pane (z 250) sits above the basemap and below the route
     // overlay's tier (350) and the markers (600).
     heatmapRef.current = new PunctualityHeatmapLayer(map);
+    // TV-0030: the user's own position - a browser-Geolocation-driven dot,
+    // independent of every layer above (no snapshot, no keyed request).
+    // Constructed alongside them so its lifecycle is identical, and wired
+    // here for the dot's click-to-recenter. The permission prompt and the
+    // first fix are asynchronous: the map view is complete either way
+    // (requirement 1), and the dot appears only if a fix arrives.
+    const userLocation = new UserLocationLayer(map);
+    userLocation.setOnRecenter(() => {
+      const fix = userLocation.currentFix();
+      // No fix yet: nothing to center on; a click before the first fix is
+      // a no-op by construction (the dot is not on the map before one).
+      if (fix !== null) {
+        map.setView([fix.lat, fix.lon], DEFAULT_MAP_ZOOM);
+      }
+    });
+    userLocation.start();
+    userLocationRef.current = userLocation;
 
     // Leaflet tracks window resizes, but the container can also change size
     // without a window resize (flex layout changes, mobile browser chrome
@@ -103,6 +124,10 @@ export default function MapView({
       markersRef.current = null;
       heatmapRef.current?.dispose();
       heatmapRef.current = null;
+      // TV-0030: the watch dies with the map (requirement 4) - stop before
+      // map.remove() so clearWatch runs while the map still exists.
+      userLocationRef.current?.stop();
+      userLocationRef.current = null;
       map.remove();
     };
   }, []);

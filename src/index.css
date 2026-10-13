@@ -927,6 +927,103 @@ body {
    exact marker colors via the shared variables (the old .legend__swatch
    rules are superseded by .debug-panel__chip--* above). */
 
+/* -----------------------------------------------------------------------
+   TV-0030: the user's own position - a pulsing blue dot with an accuracy
+   ring (src/map/UserLocation.ts). Like the tram markers, the dot sits on
+   the always-light basemap, so its colors are fixed rather than
+   color-scheme aware: #4285F4 is Google Maps' location blue - a hue the
+   app's green/red/orange/amber marker hues never collide with - and it
+   reads on both the light tiles and the strip's Canvas surfaces.
+   ----------------------------------------------------------------------- */
+:root {
+  --user-location-dot: #4285f4;
+}
+
+/* The marker icon Leaflet positions at the fix (a 14x14 box, the anchor
+   centered - see the icon options in UserLocation.ts). Leaflet's default
+   .leaflet-div-icon chrome (white background, gray border) is neutralized:
+   the dot is the icon's whole visual. The explicit pointer-events: auto
+   re-enables events for the whole icon box the same way the tram markers'
+   rule does - Leaflet's own .leaflet-interactive (set on this marker, an
+   interactive one) already applies visiblePainted, but the explicit rule
+   keeps the affordance working if that class ever changes, and a click on
+   the dot is the re-center affordance (the handler stops propagation, so
+   it never reaches the map). */
+.user-location {
+  background: none;
+  border: none;
+  pointer-events: auto;
+}
+
+/* The dot body: exactly the icon box (14x14), so Leaflet's center anchor
+   puts it precisely on the fix. The white ring separates it from the tiles
+   and from any tram marker it may overlap, like the tram markers' own
+   rings; the shadow lifts it off the map. */
+.user-location__dot {
+  display: block;
+  /* The ::after pulse ring anchors to this box. */
+  position: relative;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--user-location-dot);
+  border: 2px solid #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+}
+
+/* The pulse: a ring that swells from the dot's edge to ~2.4x its size and
+   fades as it grows (the standard you-are-here animation), on a ::after of
+   the dot body so one element carries both the static dot and the pulse.
+   ~2 s loop; pure CSS - no JS timer (requirement 3). The ring is part of
+   the dot's element, so it must never take a click itself (requirement 6:
+   only the dot's own body takes the click) - pointer-events: none keeps
+   the swollen ring transparent to clicks while it animates. Reduced-motion
+   users get the static dot. */
+.user-location__dot::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 2px solid var(--user-location-dot);
+  opacity: 0;
+  pointer-events: none;
+  animation: user-location-pulse 2s ease-out infinite;
+}
+
+@keyframes user-location-pulse {
+  0% {
+    transform: scale(1);
+    opacity: 0.55;
+  }
+  70% {
+    transform: scale(2.4);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(2.4);
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .user-location__dot::after {
+    animation: none;
+  }
+}
+
+/* The accuracy ring (TV-0030): Leaflet's L.circle renders an SVG path in
+   the overlay pane carrying this class (passed as the `className` option
+   in UserLocation.ts). A soft blue wash - same hue as the dot, 12% fill,
+   hairline edge - reads as "roughly here" without competing with the route
+   overlay's green/orange corridors it draws over. The layer is created
+   with interactive: false (requirement 6: clicks pass through it), so the
+   class styles appearance only. */
+.user-location-accuracy {
+  fill: color-mix(in srgb, var(--user-location-dot) 12%, transparent);
+  stroke: color-mix(in srgb, var(--user-location-dot) 40%, transparent);
+  stroke-width: 1;
+}
+
 /* ---------------------------------------------------------------------------
    Vehicle overview page (TV-0017, Docs/ADR/0004-vehicle-overview-page.md).
 
