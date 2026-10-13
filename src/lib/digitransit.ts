@@ -817,6 +817,7 @@ const TRAM_NETWORK_GEOMETRY_QUERY = `
     routes(transportModes: [TRAM, SUBWAY]) {
       gtfsId
       shortName
+      mode
       patterns {
         directionId
         geometry {

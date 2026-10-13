@@ -71,6 +71,23 @@ export function metroVehicleClass(
   return null;
 }
 
+/** The class's model-family name: M100 = "Rotary DC", M200 = "C20",
+ * M300 = "R320" (the user-supplied mappings). The unknown case is null. */
+export function metroModelName(vehicleNumber: number): string | null {
+  const info = metroVehicleClass(vehicleNumber);
+  if (info === null) return null;
+  switch (info.label) {
+    case "M100":
+      return "Rotary DC";
+    case "M200":
+      return "C20";
+    case "M300":
+      return "R320";
+    default:
+      return null;
+  }
+}
+
 /** The tooltip text for one metro vehicle: "M100 (Rotary DC) · 2 cars",
  * the model label with its model family in parentheses - plain labels, no
  * marketing strings. Unknown numbers say so explicitly. The model family

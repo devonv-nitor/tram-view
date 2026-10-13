@@ -15,6 +15,7 @@ import {
   isSparakoffBarTram,
   SPARAKOFF_LEGEND_LABEL,
 } from "../../lib/fleet.ts";
+import { METRO_OPERATOR_ID, metroClassTooltip } from "../../lib/metro.ts";
 import {
   describeJourney,
   estimateNextArrival,
@@ -87,7 +88,12 @@ function Hero({
         <div>
           <div className="hero__line-row">
             <span
-              className={`badge badge--${tramCategoryInfo(view.telemetry?.vehicleNumber ?? 0).category}`}
+              className={`badge badge--${
+                view.operatorId === METRO_OPERATOR_ID
+                  ? "metro"
+                  : tramCategoryInfo(view.telemetry?.vehicleNumber ?? 0)
+                      .category
+              }`}
             >
               {lineBadge(view)}
             </span>
@@ -103,7 +109,15 @@ function Hero({
               vehicleNumber: view.vehicleNumber,
             })
               ? `${SPARAKOFF_LEGEND_LABEL} (bar tram)`
-              : (tramCategoryInfo(view.vehicleNumber).model ?? "Unknown type")}
+              : view.operatorId === METRO_OPERATOR_ID
+                ? // TV-0029 (user 2026-10-13 report): the overview is
+                  // tram-scoped, so a metro vehicle has no tram category -
+                  // show its metro class instead of falling into the tram
+                  // number ranges (a metro 1xx/2xx/3xx number would
+                  // otherwise claim an MLNRV/Artic model it does not have).
+                  metroClassTooltip(view.vehicleNumber)
+                : (tramCategoryInfo(view.vehicleNumber).model ??
+                  "Unknown type")}
             {telemetry?.topic.headsign
               ? ` · towards ${telemetry.topic.headsign}`
               : ""}

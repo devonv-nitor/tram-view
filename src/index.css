@@ -583,9 +583,9 @@ body {
    by tooltip/vehicle number, not by color - three shades would be
    indistinguishable at marker scale). The teardrop geometry, rotation and
    offline dot are the tram marker's own rules, so a metro marker differs
-   only in its body color. Like the tram brand hues the body is light enough
-   that the label ink must switch to dark (#1a1a1a, 5.3:1) - white falls to
-   3.3:1 (contrast measured like TV-0010). */
+   only in its body color. Label ink is white per the user's explicit
+   choice (2026-10-13) - measured 3.3:1 against the orange, below the
+   WCAG 4.5:1 threshold, acknowledged and accepted for these labels. */
 .tram-marker--metro .tram-marker__shape {
   background: var(--tram-type-metro);
 }
@@ -902,17 +902,24 @@ body {
    three. The unknown body keeps the white ink (6:1 on its mid gray).
    TV-0013: the SpåraKoff body (rgb(235, 79, 73), luminance 0.237) gets the
    same dark ink - white falls to 3.65:1 on it while #1a1a1a meets
-   4.76:1 (contrast checked like TV-0010). TV-0029: the metro body
-   (#f15f22, luminance 0.270) joins them for the same reason - the task's
-   original blue is superseded to the metro orange (user decision
-   2026-10-12), which falls to 3.28:1 with white ink while #1a1a1a meets
-   5.30:1 (contrast measured like TV-0010). */
+   4.76:1 (contrast checked like TV-0010). TV-0029: the metro body (#f15f22, luminance 0.270) joined them at
+   merge, but the user's 2026-10-13 review choice sets the metro label
+   ink to WHITE - the 3.28:1 contrast is acknowledged and accepted (the
+   metro label is the only ink exception; the tram brand hues keep the
+   dark ink). */
 .tram-marker--a .tram-marker__label,
 .tram-marker--b .tram-marker__label,
 .tram-marker--c .tram-marker__label,
-.tram-marker--sparakoff .tram-marker__label,
-.tram-marker--metro .tram-marker__label {
+.tram-marker--sparakoff .tram-marker__label {
   color: #1a1a1a;
+}
+
+/* TV-0029 (user 2026-10-13): the metro label ink is white - the user's
+   explicit choice, acknowledged as below the WCAG 4.5:1 threshold (3.3:1
+   measured) and accepted for these labels. Kept as its own rule so the
+   metro ink decision stays separate from the tram ink rule above. */
+.tram-marker--metro .tram-marker__label {
+  color: #ffffff;
 }
 
 /* Tram type colors in the strip (TV-0027, TV-0009): the legend became the
@@ -1199,6 +1206,12 @@ body {
 
 .badge--sparakoff {
   background: var(--tram-type-sparakoff);
+}
+
+/* TV-0029 (user 2026-10-13): the metro vehicle's overview badge - the same
+   metro orange as the map marker. */
+.badge--metro {
+  background: var(--tram-type-metro);
 }
 
 .hero__title {
