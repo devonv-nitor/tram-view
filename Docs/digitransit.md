@@ -157,12 +157,6 @@ number - even when its route resolves to no displayed line, where any other
 vehicle would show the red dot - plus its own legend entry; it never tallies
 into the MLNRV (category A) count the number ranges would otherwise give it.
 
-TV-0023: the marker popup carries passenger-facing content only and no longer
-shows the TV-0016 debug route resolution. Nothing reads that resolution now:
-the raw GTFS route list the metadata query still retains, and
-`resolveTramRouteDebug()` (`src/lib/digitransit.ts`), have no caller - removing
-them is [TV-0024](../Tasks/TV-0024-retire-debug-route-plumbing.md).
-
 ## API key setup
 
 1. Register for a digitransit subscription key at
